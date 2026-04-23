@@ -950,18 +950,144 @@ html, body {
   </nav>
 
 <section class="tab-content active" data-tab="inventory">
-  <div class="placeholder-card">
-    <h2>📦 Inventory Core</h2>
-    <p>View Retail / Warehouse / Consignment stock belum tersedia di hub ini. Gunakan master dashboard yang masih berisi view lengkap dengan chart + detail modal + pagination.</p>
-    <a href="https://database-zuma.github.io/stock-inventory-dashboard/dashboard_inventory.html" target="_blank">Buka Inventory di Master Dashboard →</a>
+
+  <!-- Sub-tabs: Retail / Warehouse / Consignment -->
+  <div class="tab-nav" style="margin-bottom:10px;">
+    <button class="tab-btn active" data-invtype="retail" onclick="invSwitchType('retail')">Retail</button>
+    <button class="tab-btn" data-invtype="warehouse" onclick="invSwitchType('warehouse')">Warehouse</button>
+    <button class="tab-btn" data-invtype="consignment" onclick="invSwitchType('consignment')">Consignment</button>
   </div>
+
+  <!-- Filter bar -->
+  <div class="filter-bar">
+    <div class="filter-group flex">
+      <label class="filter-label">Cari</label>
+      <input type="text" id="invSearch" class="filter-input" placeholder="Kode / kode kecil / nama barang" oninput="invRender()">
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Area</label>
+      <select id="invArea" class="filter-select" onchange="invOnAreaChange()"><option value="">Semua Area</option></select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label" id="invStoreLabel">Toko / WH</label>
+      <select id="invStore" class="filter-select" onchange="invRender()"><option value="">Semua</option></select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Tier</label>
+      <select id="invTier" class="filter-select" onchange="invRender()"><option value="">Semua</option></select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Gender</label>
+      <select id="invGender" class="filter-select" onchange="invRender()"><option value="">Semua</option></select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Series</label>
+      <select id="invSeries" class="filter-select" onchange="invRender()"><option value="">Semua</option></select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">&nbsp;</label>
+      <button class="btn-reset" onclick="invReset()">Reset</button>
+    </div>
+  </div>
+
+  <!-- KPI -->
+  <div class="kpi-grid" id="invKpi" style="grid-template-columns:repeat(4,1fr);"></div>
+
+  <!-- Table -->
+  <div class="card">
+    <div class="card-header">
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+        <div class="card-title" id="invTableTitle">Data Stock Retail</div>
+        <div class="card-meta" id="invCountInfo">—</div>
+      </div>
+      <button class="btn btn-primary" onclick="invExportCSV()">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>
+        Export CSV
+      </button>
+    </div>
+    <div class="table-wrap" style="max-height:68vh;overflow:auto;">
+      <table class="data" id="invTable" style="width:100%;">
+        <thead>
+          <tr>
+            <th style="cursor:pointer;" onclick="invSort('kode')">Kode</th>
+            <th style="cursor:pointer;" onclick="invSort('kode_kecil')">Kode Kecil</th>
+            <th style="cursor:pointer;" onclick="invSort('name')">Nama Barang</th>
+            <th class="center">Size</th>
+            <th class="center">Tier</th>
+            <th class="center">Gender</th>
+            <th>Series</th>
+            <th class="center" id="invPartnerHdr" style="display:none;">Partner</th>
+            <th class="right" style="cursor:pointer;" onclick="invSort('total')">Total ▾</th>
+            <th class="right">Lokasi</th>
+          </tr>
+        </thead>
+        <tbody id="invTbody"></tbody>
+      </table>
+    </div>
+    <div class="pagination">
+      <div id="invPageInfo">—</div>
+      <div id="invPageButtons"></div>
+    </div>
+  </div>
+
 </section>
 <section class="tab-content" data-tab="stockcontrol">
-  <div class="placeholder-card">
-    <h2>📊 Stock Control</h2>
-    <p>Control Stock Retail + Online (pivot per-bulan, kode_kecil vs SKU view) belum tersedia di hub ini. Gunakan master dashboard yang masih berisi view lengkap.</p>
-    <a href="https://database-zuma.github.io/stock-inventory-dashboard/dashboard_inventory.html" target="_blank">Buka Stock Control di Master Dashboard →</a>
+
+  <!-- Sub-tabs: Retail / Online -->
+  <div class="tab-nav" style="margin-bottom:10px;">
+    <button class="tab-btn active" data-sctype="retail" onclick="scSwitchType('retail')">Control Stock Retail</button>
+    <button class="tab-btn" data-sctype="online" onclick="scSwitchType('online')">Control Stock Online</button>
   </div>
+
+  <!-- Filter bar -->
+  <div class="filter-bar">
+    <div class="filter-group flex">
+      <label class="filter-label">Cari</label>
+      <input type="text" id="scSearch" class="filter-input" placeholder="Kode / kode kecil / nama barang" oninput="scRender()">
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Tier</label>
+      <select id="scTier" class="filter-select" onchange="scRender()"><option value="">Semua</option></select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Gender</label>
+      <select id="scGender" class="filter-select" onchange="scRender()"><option value="">Semua</option></select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Series</label>
+      <select id="scSeries" class="filter-select" onchange="scRender()"><option value="">Semua</option></select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">&nbsp;</label>
+      <label style="display:flex;align-items:center;gap:5px;font-size:11px;padding:6px 0;color:var(--fg-muted);">
+        <input type="checkbox" id="scHideZero" checked onchange="scRender()"> Sembunyikan total=0
+      </label>
+    </div>
+  </div>
+
+  <!-- KPI -->
+  <div class="kpi-grid" id="scKpi" style="grid-template-columns:repeat(4,1fr);"></div>
+
+  <!-- Table -->
+  <div class="card">
+    <div class="card-header">
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+        <div class="card-title" id="scTableTitle">Control Stock Retail — Per Kode Kecil</div>
+        <div class="card-meta" id="scCountInfo">—</div>
+      </div>
+      <button class="btn btn-primary" onclick="scExportCSV()">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>
+        Export CSV
+      </button>
+    </div>
+    <div class="table-wrap" style="max-height:68vh;overflow:auto;">
+      <table class="data" id="scTable" style="width:100%;">
+        <thead id="scThead"></thead>
+        <tbody id="scTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
 </section>
 <section class="tab-content" data-tab="maxstock">
 <div class="tab-nav">
@@ -1351,6 +1477,8 @@ function selectEntity(entity) {
     document.querySelectorAll('.entity-btn-global').forEach(function(b){ b.classList.toggle('active', b.dataset.entity === entity); });
     try { if (typeof selectEntity_stockbyarea === 'function') selectEntity_stockbyarea(entity); } catch(e) { console.warn('sba entity:', e); }
     try { if (typeof selectEntity_maxstock === 'function') selectEntity_maxstock(entity); } catch(e) { console.warn('ms entity:', e); }
+    try { if (activeTab === 'inventory' && typeof invRender === 'function') { invPopulateFilters(); invRender(); } } catch(e) { console.warn('inv entity:', e); }
+    try { if (activeTab === 'stockcontrol' && typeof scRender === 'function') { scPopulateFilters(); scRender(); } } catch(e) { console.warn('sc entity:', e); }
 }
 
 // Unified tab switcher
@@ -1367,6 +1495,8 @@ function switchHubTab(tab) {
             if (tab === 'stockbyarea' && typeof initStockByArea === 'function') initStockByArea();
             else if (tab === 'maxstock' && typeof updateMaxStockAnalysis === 'function') updateMaxStockAnalysis();
             else if (tab === 'redistribusi' && typeof renderRdTable === 'function' && typeof rdData !== 'undefined' && rdData) renderRdTable();
+            else if (tab === 'inventory' && typeof invRender === 'function') { invPopulateFilters(); invRender(); }
+            else if (tab === 'stockcontrol' && typeof scRender === 'function') { scPopulateFilters(); scRender(); }
             else if (tab === 'skusearch') { /* no init needed — waits for user input */ }
             else if (tab === 'summaryreport') { /* no init needed — just export buttons */ }
         } catch(e) { console.error('tab init:', tab, e); }
@@ -3549,6 +3679,449 @@ function exportWHOnline() {
     if (baliRows.length === 0 && jktRows.length === 0) { toast('Tidak ada data WH Online', true); return; }
     XLSX.writeFile(wb, 'stock_wh_online_' + new Date().toISOString().split('T')[0] + '.xlsx');
     toast('Downloaded: stock_wh_online.xlsx');
+}
+
+
+// ===================================================================
+// MODULE: Inventory Core (Retail / Warehouse / Consignment)
+// ===================================================================
+var invCurrentType = 'retail';
+var invSortField = 'total';
+var invSortDir = 'desc';
+var invCurrentPage = 1;
+var invPageSize = 50;
+var invFiltered = [];
+
+function invSwitchType(type) {
+    invCurrentType = type;
+    invCurrentPage = 1;
+    document.querySelectorAll('.tab-btn[data-invtype]').forEach(function(b){ b.classList.toggle('active', b.dataset.invtype === type); });
+    var label = type === 'retail' ? 'Toko' : (type === 'warehouse' ? 'Warehouse' : 'Outlet');
+    var el = document.getElementById('invStoreLabel'); if (el) el.textContent = label;
+    var title = type === 'retail' ? 'Data Stock Retail' : (type === 'warehouse' ? 'Data Stock Warehouse' : 'Data Stock Consignment');
+    var tEl = document.getElementById('invTableTitle'); if (tEl) tEl.textContent = title;
+    var partnerHdr = document.getElementById('invPartnerHdr'); if (partnerHdr) partnerHdr.style.display = type === 'consignment' ? '' : 'none';
+    invPopulateFilters();
+    invRender();
+}
+
+function invOnAreaChange() {
+    var area = document.getElementById('invArea').value;
+    var sel = document.getElementById('invStore');
+    var cur = sel.value;
+    var items = invGetSourceItems();
+    var stores = {};
+    items.forEach(function(it) {
+        if (!it.store_stock) return;
+        Object.keys(it.store_stock).forEach(function(s) {
+            if (area) {
+                var a = (typeof getAreaFromStore === 'function') ? getAreaFromStore(s) : '';
+                if (a !== area) return;
+            }
+            stores[s] = true;
+        });
+    });
+    sel.innerHTML = '<option value="">Semua</option>' + Object.keys(stores).sort().map(function(s){ return '<option>' + esc(s) + '</option>'; }).join('');
+    sel.value = cur;
+    invRender();
+}
+
+function invGetSourceItems() {
+    var ent = typeof currentEntity !== 'undefined' ? currentEntity : 'DDD';
+    if (invCurrentType === 'consignment') {
+        return (consignmentStockItems || []).filter(function(i) { return String(i.entity || '').toUpperCase() === ent.toUpperCase(); });
+    }
+    var entData = (allData || {})[ent] || {};
+    return entData[invCurrentType] || [];
+}
+
+function invPopulateFilters() {
+    var items = invGetSourceItems();
+    var tiers = {}, genders = {}, series = {}, areas = {}, stores = {};
+    items.forEach(function(it) {
+        if (it.tier !== undefined && it.tier !== null && it.tier !== '') tiers[String(it.tier)] = true;
+        if (it.gender) genders[it.gender] = true;
+        if (it.series) series[it.series] = true;
+        if (it.store_stock) {
+            Object.keys(it.store_stock).forEach(function(s){
+                stores[s] = true;
+                var a = (typeof getAreaFromStore === 'function') ? getAreaFromStore(s) : null;
+                if (a) areas[a] = true;
+            });
+        }
+    });
+    function fill(id, map, sortFn) {
+        var el = document.getElementById(id); if (!el) return;
+        var cur = el.value;
+        var keys = Object.keys(map); keys.sort(sortFn || undefined);
+        el.innerHTML = '<option value="">Semua</option>' + keys.map(function(k){ return '<option>' + esc(k) + '</option>'; }).join('');
+        el.value = cur;
+    }
+    fill('invTier', tiers, function(a,b){ return (parseInt(a)||0) - (parseInt(b)||0); });
+    fill('invGender', genders);
+    fill('invSeries', series);
+    fill('invArea', areas);
+    fill('invStore', stores);
+}
+
+function invSort(field) {
+    if (invSortField === field) invSortDir = invSortDir === 'desc' ? 'asc' : 'desc';
+    else { invSortField = field; invSortDir = 'desc'; }
+    invRender();
+}
+
+function invReset() {
+    ['invSearch','invArea','invStore','invTier','invGender','invSeries'].forEach(function(id){ var e=document.getElementById(id); if(e)e.value=''; });
+    invSortField = 'total'; invSortDir = 'desc'; invCurrentPage = 1;
+    invRender();
+}
+
+function invRender() {
+    var items = invGetSourceItems();
+    var q = (document.getElementById('invSearch') || {}).value || '';
+    var area = (document.getElementById('invArea') || {}).value || '';
+    var store = (document.getElementById('invStore') || {}).value || '';
+    var tier = (document.getElementById('invTier') || {}).value || '';
+    var gender = (document.getElementById('invGender') || {}).value || '';
+    var series = (document.getElementById('invSeries') || {}).value || '';
+    q = q.toLowerCase().trim();
+
+    var rows = items.map(function(it) {
+        var ss = it.store_stock || {};
+        var qty = 0, loc = 0;
+        Object.keys(ss).forEach(function(s) {
+            if (area) {
+                var a = (typeof getAreaFromStore === 'function') ? getAreaFromStore(s) : '';
+                if (a !== area) return;
+            }
+            if (store && s !== store) return;
+            var v = Number(ss[s]) || 0;
+            if (v !== 0) { qty += v; loc += 1; }
+        });
+        return {
+            kode: it.kode || '',
+            kode_kecil: it.kode_kecil || '',
+            name: it.name || '',
+            size: it.size || '',
+            tier: it.tier != null ? String(it.tier) : '',
+            gender: it.gender || '',
+            series: it.series || '',
+            tipe: it.tipe || '',
+            partner: it.partner || '',
+            version: it.version || '',
+            total: qty,
+            loc: loc
+        };
+    });
+
+    var filtered = rows.filter(function(r){
+        if (tier && r.tier !== tier) return false;
+        if (gender && r.gender !== gender) return false;
+        if (series && r.series !== series) return false;
+        if (q) {
+            var hay = (r.kode + '|' + r.kode_kecil + '|' + r.name).toLowerCase();
+            if (hay.indexOf(q) < 0) return false;
+        }
+        return true;
+    });
+
+    filtered.sort(function(a,b){
+        var va = a[invSortField], vb = b[invSortField];
+        if (typeof va === 'number' && typeof vb === 'number') return invSortDir === 'desc' ? vb - va : va - vb;
+        va = String(va).toLowerCase(); vb = String(vb).toLowerCase();
+        return invSortDir === 'desc' ? (va < vb ? 1 : (va > vb ? -1 : 0)) : (va < vb ? -1 : (va > vb ? 1 : 0));
+    });
+
+    invFiltered = filtered;
+
+    // KPI
+    var totalSku = filtered.length;
+    var totalStock = filtered.reduce(function(s,r){ return s + r.total; }, 0);
+    var negCount = filtered.filter(function(r){ return r.total < 0; }).length;
+    var locations = {}; filtered.forEach(function(r){ if (r.loc) locations[r.loc] = true; });
+    var kpi = document.getElementById('invKpi');
+    if (kpi) {
+        var ent = typeof currentEntity !== 'undefined' ? currentEntity : 'DDD';
+        kpi.innerHTML =
+            '<div class="kpi-card kpi-primary"><div class="kpi-label">Total SKU</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular">' + fmt(totalSku) + '</span></span></div><div class="kpi-sub">' + esc(ent) + ' · ' + esc(invCurrentType) + '</div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">Total Stock</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular">' + fmt(totalStock) + '</span></span></div><div class="kpi-sub">pairs gabungan</div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">Minus on Hand</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular" style="color:' + (negCount > 0 ? '#ef4444' : 'inherit') + ';">' + fmt(negCount) + '</span></span></div><div class="kpi-sub">SKU dengan stock &lt; 0</div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">Lokasi Aktif</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular">' + fmt(Object.keys(locations).length > 0 ? Math.max.apply(null, Object.keys(locations).map(Number)) : 0) + '</span></span></div><div class="kpi-sub">lokasi max per SKU</div></div>';
+    }
+
+    // Pagination
+    var totalPages = Math.max(1, Math.ceil(filtered.length / invPageSize));
+    if (invCurrentPage > totalPages) invCurrentPage = totalPages;
+    var startIdx = (invCurrentPage - 1) * invPageSize;
+    var pageRows = filtered.slice(startIdx, startIdx + invPageSize);
+
+    var tbody = document.getElementById('invTbody');
+    if (tbody) {
+        if (!filtered.length) {
+            tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--fg-soft);">Tidak ada data</td></tr>';
+        } else {
+            var showPartner = invCurrentType === 'consignment';
+            tbody.innerHTML = pageRows.map(function(r){
+                var totalCls = r.total < 0 ? 'color:#ef4444;font-weight:700;' : (r.total === 0 ? 'color:var(--fg-soft);' : '');
+                return '<tr>' +
+                    '<td style="font-family:ui-monospace,monospace;font-size:11px;">' + esc(r.kode || '—') + '</td>' +
+                    '<td style="font-family:ui-monospace,monospace;font-size:11px;color:var(--fg-muted);">' + esc(r.kode_kecil || '—') + '</td>' +
+                    '<td class="strong">' + esc(r.name) + '</td>' +
+                    '<td class="center">' + esc(r.size) + '</td>' +
+                    '<td class="center">' + esc(r.tier || '—') + '</td>' +
+                    '<td class="center">' + esc(r.gender || '—') + '</td>' +
+                    '<td>' + esc(r.series || '—') + '</td>' +
+                    (showPartner ? '<td class="center">' + esc(r.partner || '—') + '</td>' : '') +
+                    '<td class="right" style="' + totalCls + '">' + fmt(r.total) + '</td>' +
+                    '<td class="right muted">' + fmt(r.loc) + '</td>' +
+                    '</tr>';
+            }).join('');
+        }
+    }
+
+    var ci = document.getElementById('invCountInfo');
+    if (ci) ci.textContent = fmt(filtered.length) + ' SKU · ' + fmt(totalStock) + ' pairs';
+
+    var pi = document.getElementById('invPageInfo');
+    if (pi) pi.textContent = 'Page ' + invCurrentPage + ' / ' + totalPages + ' (' + fmt(filtered.length) + ' rows)';
+
+    var pb = document.getElementById('invPageButtons');
+    if (pb) {
+        var btns = [];
+        btns.push('<button onclick="invPrev()"' + (invCurrentPage <= 1 ? ' disabled' : '') + '>◀ Prev</button>');
+        btns.push('<button onclick="invNext()"' + (invCurrentPage >= totalPages ? ' disabled' : '') + '>Next ▶</button>');
+        pb.innerHTML = btns.join(' ');
+    }
+}
+function invPrev() { if (invCurrentPage > 1) { invCurrentPage--; invRender(); } }
+function invNext() { invCurrentPage++; invRender(); }
+
+function invExportCSV() {
+    if (!invFiltered || !invFiltered.length) { alert('Tidak ada data untuk export'); return; }
+    var showPartner = invCurrentType === 'consignment';
+    var headers = ['Kode','Kode Kecil','Nama Barang','Size','Tier','Gender','Series','Tipe','Version'];
+    if (showPartner) headers.push('Partner');
+    headers.push('Total','Lokasi');
+    function escv(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
+    var out = [headers.map(escv).join(',')];
+    invFiltered.forEach(function(r) {
+        var row = [r.kode, r.kode_kecil, r.name, r.size, r.tier, r.gender, r.series, r.tipe || '', r.version || ''];
+        if (showPartner) row.push(r.partner || '');
+        row.push(r.total, r.loc);
+        out.push(row.map(escv).join(','));
+    });
+    var blob = new Blob(['﻿' + out.join('\n')], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    var ent = typeof currentEntity !== 'undefined' ? currentEntity : 'DDD';
+    a.download = 'inventory_' + ent + '_' + invCurrentType + '_' + new Date().toISOString().slice(0,10) + '.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+// ===================================================================
+// MODULE: Stock Control (Retail / Online) — kode_kecil level pivot
+// Showing stock vs sales per month (jan/feb/mar)
+// ===================================================================
+var scCurrentType = 'retail';
+var scFiltered = [];
+
+function scSwitchType(type) {
+    scCurrentType = type;
+    document.querySelectorAll('.tab-btn[data-sctype]').forEach(function(b){ b.classList.toggle('active', b.dataset.sctype === type); });
+    var title = type === 'retail' ? 'Control Stock Retail — Per Kode Kecil' : 'Control Stock Online — Per Kode Kecil';
+    var el = document.getElementById('scTableTitle'); if (el) el.textContent = title;
+    scPopulateFilters();
+    scRender();
+}
+
+function scGetSourceItems() {
+    var ent = typeof currentEntity !== 'undefined' ? currentEntity : 'DDD';
+    var entData = (allData || {})[ent] || {};
+    if (scCurrentType === 'retail') {
+        return entData.retail || [];
+    } else {
+        // Online = WH online bali + online jakarta aggregation (from warehouse items)
+        return (entData.warehouse || []).filter(function(it) {
+            if (!it.store_stock) return false;
+            return Object.keys(it.store_stock).some(function(s){
+                var sl = s.toLowerCase();
+                return sl.indexOf('online bali') !== -1 || sl.indexOf('online jakarta') !== -1 || sl.indexOf('online jkt') !== -1;
+            });
+        });
+    }
+}
+
+function scPopulateFilters() {
+    var items = scGetSourceItems();
+    var tiers = {}, genders = {}, series = {};
+    items.forEach(function(it) {
+        if (it.tier != null && it.tier !== '') tiers[String(it.tier)] = true;
+        if (it.gender) genders[it.gender] = true;
+        if (it.series) series[it.series] = true;
+    });
+    function fill(id, map, sortFn) {
+        var el = document.getElementById(id); if (!el) return;
+        var cur = el.value;
+        var keys = Object.keys(map); keys.sort(sortFn || undefined);
+        el.innerHTML = '<option value="">Semua</option>' + keys.map(function(k){ return '<option>' + esc(k) + '</option>'; }).join('');
+        el.value = cur;
+    }
+    fill('scTier', tiers, function(a,b){ return (parseInt(a)||0) - (parseInt(b)||0); });
+    fill('scGender', genders);
+    fill('scSeries', series);
+}
+
+function scRender() {
+    var items = scGetSourceItems();
+    var q = (document.getElementById('scSearch') || {}).value || '';
+    var tier = (document.getElementById('scTier') || {}).value || '';
+    var gender = (document.getElementById('scGender') || {}).value || '';
+    var series = (document.getElementById('scSeries') || {}).value || '';
+    var hideZero = (document.getElementById('scHideZero') || {}).checked;
+    q = q.toLowerCase().trim();
+
+    // Aggregate by kode_kecil
+    var byKK = {};
+    items.forEach(function(it) {
+        var kk = (it.kode_kecil || '').toUpperCase();
+        if (!kk) return;
+        if (!byKK[kk]) {
+            byKK[kk] = {
+                kode_kecil: kk,
+                kode: (it.kode || '').toUpperCase(),
+                name: it.name || '',
+                tier: it.tier != null ? String(it.tier) : '',
+                gender: it.gender || '',
+                series: it.series || '',
+                tipe: it.tipe || '',
+                version: it.version || '',
+                sizeStock: {},
+                total: 0,
+                sizes: {}
+            };
+        }
+        var row = byKK[kk];
+        var sz = it.size || '—';
+        row.sizes[sz] = true;
+        var qty = 0;
+        if (it.store_stock) {
+            Object.values(it.store_stock).forEach(function(v){ qty += Number(v) || 0; });
+        } else {
+            qty = Number(it.total) || 0;
+        }
+        row.sizeStock[sz] = (row.sizeStock[sz] || 0) + qty;
+        row.total += qty;
+    });
+
+    var allSizes = {};
+    Object.values(byKK).forEach(function(r){ Object.keys(r.sizes).forEach(function(s){ allSizes[s] = true; }); });
+    var sizeCols = Object.keys(allSizes).sort(function(a,b){ return (parseInt(a)||0) - (parseInt(b)||0); });
+
+    var rows = Object.values(byKK);
+    rows = rows.filter(function(r){
+        if (hideZero && r.total === 0) return false;
+        if (tier && r.tier !== tier) return false;
+        if (gender && r.gender !== gender) return false;
+        if (series && r.series !== series) return false;
+        if (q) {
+            var hay = (r.kode + '|' + r.kode_kecil + '|' + r.name).toLowerCase();
+            if (hay.indexOf(q) < 0) return false;
+        }
+        return true;
+    });
+    rows.sort(function(a,b){ return b.total - a.total; });
+
+    scFiltered = rows;
+
+    // KPI
+    var totalArticles = rows.length;
+    var totalStock = rows.reduce(function(s,r){ return s + r.total; }, 0);
+    var zeroCount = rows.filter(function(r){ return r.total === 0; }).length;
+    var negCount = rows.filter(function(r){ return r.total < 0; }).length;
+    var kpi = document.getElementById('scKpi');
+    if (kpi) {
+        var ent = typeof currentEntity !== 'undefined' ? currentEntity : 'DDD';
+        kpi.innerHTML =
+            '<div class="kpi-card kpi-primary"><div class="kpi-label">Total Artikel</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular">' + fmt(totalArticles) + '</span></span></div><div class="kpi-sub">' + esc(ent) + ' · ' + esc(scCurrentType) + '</div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">Total Stock</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular">' + fmt(totalStock) + '</span></span></div><div class="kpi-sub">pairs gabungan</div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">Total 0</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular" style="color:' + (zeroCount > 0 ? '#f59e0b' : 'inherit') + ';">' + fmt(zeroCount) + '</span></span></div><div class="kpi-sub">Artikel habis</div></div>' +
+            '<div class="kpi-card"><div class="kpi-label">Minus</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular" style="color:' + (negCount > 0 ? '#ef4444' : 'inherit') + ';">' + fmt(negCount) + '</span></span></div><div class="kpi-sub">Artikel stock &lt; 0</div></div>';
+    }
+
+    // Build table header with size columns
+    var thead = document.getElementById('scThead');
+    if (thead) {
+        var h = '<tr>' +
+            '<th>Kode</th>' +
+            '<th>Kode Kecil</th>' +
+            '<th>Nama Barang</th>' +
+            '<th class="center">Tier</th>' +
+            '<th class="center">Gender</th>' +
+            '<th>Series</th>';
+        sizeCols.forEach(function(sz){ h += '<th class="right">' + esc(sz) + '</th>'; });
+        h += '<th class="right">Total</th></tr>';
+        thead.innerHTML = h;
+    }
+
+    var tbody = document.getElementById('scTbody');
+    if (tbody) {
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="' + (7 + sizeCols.length) + '" style="text-align:center;padding:40px;color:var(--fg-soft);">Tidak ada data</td></tr>';
+        } else {
+            var cap = 300;
+            var display = rows.slice(0, cap);
+            tbody.innerHTML = display.map(function(r){
+                var cells = '';
+                sizeCols.forEach(function(sz){
+                    var v = r.sizeStock[sz] || 0;
+                    var cls = v < 0 ? 'color:#ef4444;' : (v === 0 ? 'color:var(--fg-soft);' : '');
+                    cells += '<td class="right" style="' + cls + 'font-variant-numeric:tabular-nums;">' + (v === 0 ? '—' : fmt(v)) + '</td>';
+                });
+                var totalCls = r.total < 0 ? 'color:#ef4444;font-weight:700;' : (r.total === 0 ? 'color:var(--fg-soft);' : 'font-weight:700;');
+                return '<tr>' +
+                    '<td style="font-family:ui-monospace,monospace;font-size:11px;">' + esc(r.kode || '—') + '</td>' +
+                    '<td style="font-family:ui-monospace,monospace;font-size:11px;color:var(--fg-muted);">' + esc(r.kode_kecil) + '</td>' +
+                    '<td class="strong">' + esc(r.name) + '</td>' +
+                    '<td class="center">' + esc(r.tier || '—') + '</td>' +
+                    '<td class="center">' + esc(r.gender || '—') + '</td>' +
+                    '<td>' + esc(r.series || '—') + '</td>' +
+                    cells +
+                    '<td class="right" style="' + totalCls + '">' + fmt(r.total) + '</td>' +
+                    '</tr>';
+            }).join('');
+            if (rows.length > cap) {
+                tbody.innerHTML += '<tr><td colspan="' + (7 + sizeCols.length) + '" style="text-align:center;padding:10px;color:var(--fg-soft);font-style:italic;background:var(--muted);">Menampilkan ' + cap + ' dari ' + fmt(rows.length) + '. Persempit pakai filter, atau Export CSV untuk lengkap.</td></tr>';
+            }
+        }
+    }
+
+    var ci = document.getElementById('scCountInfo');
+    if (ci) ci.textContent = fmt(rows.length) + ' artikel · ' + fmt(totalStock) + ' pairs';
+}
+
+function scExportCSV() {
+    if (!scFiltered || !scFiltered.length) { alert('Tidak ada data untuk export'); return; }
+    // Collect all sizes across rows
+    var allSizes = {};
+    scFiltered.forEach(function(r){ Object.keys(r.sizeStock).forEach(function(s){ allSizes[s] = true; }); });
+    var sizeCols = Object.keys(allSizes).sort(function(a,b){ return (parseInt(a)||0) - (parseInt(b)||0); });
+    var headers = ['Kode','Kode Kecil','Nama Barang','Tier','Gender','Series','Tipe','Version'];
+    sizeCols.forEach(function(sz){ headers.push('Size ' + sz); });
+    headers.push('Total');
+    function escv(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
+    var out = [headers.map(escv).join(',')];
+    scFiltered.forEach(function(r) {
+        var row = [r.kode, r.kode_kecil, r.name, r.tier, r.gender, r.series, r.tipe || '', r.version || ''];
+        sizeCols.forEach(function(sz){ row.push(r.sizeStock[sz] || 0); });
+        row.push(r.total);
+        out.push(row.map(escv).join(','));
+    });
+    var blob = new Blob(['﻿' + out.join('\n')], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    var ent = typeof currentEntity !== 'undefined' ? currentEntity : 'DDD';
+    a.download = 'stockcontrol_' + ent + '_' + scCurrentType + '_' + new Date().toISOString().slice(0,10) + '.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
 
 </script>
