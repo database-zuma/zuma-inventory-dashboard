@@ -62,7 +62,7 @@ html, body {
 }
 
 /* ======= SHELL ======= */
-.shell { max-width: 1700px; margin: 0 auto; padding: 18px 22px 40px; }
+.shell { max-width: 1400px; margin: 0 auto; padding: 18px 22px 40px; }
 
 /* ======= HEADER ======= */
 .header {
@@ -319,7 +319,7 @@ html, body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter"
 ::-webkit-scrollbar-thumb { background: rgba(0,42,58,0.25); border-radius: 3px; }
 
 .top-strip { height: 3px; background: linear-gradient(90deg, var(--navy) 0%, var(--navy) 35%, var(--accent) 100%); }
-.shell { max-width: 1500px; margin: 0 auto; padding: 18px 22px 40px; }
+.shell { max-width: 1400px; margin: 0 auto; padding: 18px 22px 40px; }
 
 .header { display: flex; align-items: center; justify-content: space-between; background: var(--navy); padding: 12px 16px; border-radius: var(--radius); margin-bottom: 12px; color: #fff; gap: 14px; flex-wrap: wrap; }
 .brand { display: flex; align-items: center; gap: 10px; }
@@ -433,7 +433,7 @@ html, body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter"
 ::-webkit-scrollbar-thumb { background: rgba(0,42,58,0.25); border-radius: 3px; }
 
 .top-strip { height: 3px; background: linear-gradient(90deg, var(--navy) 0%, var(--navy) 35%, var(--accent) 100%); }
-.shell { max-width: 1700px; margin: 0 auto; padding: 18px 22px 40px; }
+.shell { max-width: 1400px; margin: 0 auto; padding: 18px 22px 40px; }
 
 .header { display: flex; align-items: center; justify-content: space-between; background: var(--navy); padding: 12px 16px; border-radius: var(--radius); margin-bottom: 12px; color: #fff; gap: 14px; flex-wrap: wrap; }
 .brand { display: flex; align-items: center; gap: 10px; }
@@ -580,7 +580,7 @@ html, body {
 ::-webkit-scrollbar-thumb { background: rgba(0,42,58,0.25); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(0,42,58,0.45); }
 .top-strip { height: 3px; background: linear-gradient(90deg, var(--navy) 0%, var(--navy) 35%, var(--accent) 100%); }
-.shell { max-width: 1700px; margin: 0 auto; padding: 18px 22px 40px; }
+.shell { max-width: 1400px; margin: 0 auto; padding: 18px 22px 40px; }
 
 .header {
   display: flex; align-items: center; justify-content: space-between;
@@ -897,25 +897,48 @@ html, body {
 
 <div class="shell">
 
+  <!-- HEADER -->
   <header class="header">
     <div class="brand">
       <div class="brand-mark">Z</div>
       <div>
         <div class="brand-title">Zuma Inventory Analytics</div>
-        <div class="brand-sub">Inventory · Stock Control · Max Stock · Redistribusi · Stok per Area · SKU Search · Summary Report</div>
+        <div class="brand-sub">Omnichannel Stock · Retail · Warehouse · Consignment</div>
       </div>
     </div>
     <div class="header-right">
-      <div class="entity-bar-global">
-        <button class="entity-btn-global active" data-entity="DDD">DDD</button>
-        <button class="entity-btn-global" data-entity="MBB">MBB</button>
-        <button class="entity-btn-global" data-entity="UBB">UBB</button>
-        <button class="entity-btn-global" data-entity="LJBB">LJBB</button>
-      </div>
-      <span class="pill">Data per <strong id="data-snapshot-date">—</strong></span>
+      <button class="btn-ghost" id="btnRefresh" title="Refresh data" onclick="location.reload()">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M13.5 8a5.5 5.5 0 0 1-10.38 2.5M2.5 8a5.5 5.5 0 0 1 10.38-2.5"/><path d="M13.5 3v3.5H10M2.5 13v-3.5H6" stroke-linejoin="round"/></svg>
+        Refresh
+      </button>
+      <span class="pill">Data per: <strong id="data-snapshot-date">—</strong></span>
     </div>
   </header>
 
+  <!-- FILTER BAR (shared entity selector) -->
+  <div class="filter-bar">
+    <div class="filter-group">
+      <label class="filter-label">Entity</label>
+      <div class="preset-bar" id="entityToggleBarGlobal">
+        <button class="preset-btn active entity-btn-global" data-entity="DDD">DDD</button>
+        <button class="preset-btn entity-btn-global" data-entity="MBB">MBB</button>
+        <button class="preset-btn entity-btn-global" data-entity="UBB">UBB</button>
+        <button class="preset-btn entity-btn-global" data-entity="LJBB">LJBB</button>
+      </div>
+    </div>
+    <div class="filter-group flex" style="max-width:auto;">
+      <label class="filter-label">Info</label>
+      <div style="font-size:11px;color:var(--fg-soft);padding:5px 0;line-height:1.5;">
+        Entity toggle berlaku untuk semua tab. Filter spesifik (area, store, tier, dll) tersedia di dalam masing-masing tab.
+      </div>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">&nbsp;</label>
+      <a href="https://database-zuma.github.io/stock-inventory-dashboard/dashboard_inventory.html" target="_blank" class="btn-reset" title="Buka master dashboard">↗ Master</a>
+    </div>
+  </div>
+
+  <!-- TAB NAV -->
   <nav class="tab-nav" id="tabNav">
     <button class="tab-btn active" data-tab="inventory">Inventory</button>
     <button class="tab-btn" data-tab="stockcontrol">Stock Control</button>
