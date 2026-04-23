@@ -1088,14 +1088,27 @@ html, body {
 </section>
 <section class="tab-content" data-tab="stockcontrol">
 
-  <!-- Quick option: hide total=0 -->
-  <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:10px;">
+  <!-- Quick option: hide total=0 + GAP status filter -->
+  <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <label class="filter-label" style="margin:0;">GAP Status</label>
+      <select id="scGapFilter" class="filter-select" onchange="scRender()" style="min-width:150px;">
+        <option value="">Semua</option>
+        <option value="understock">🔴 Understock</option>
+        <option value="tipis">🟡 Tipis</option>
+        <option value="aman">🟢 Aman</option>
+        <option value="dead">💀 Dead Stock</option>
+      </select>
+    </div>
     <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--fg-muted);">
       <input type="checkbox" id="scHideZero" checked onchange="scRender()"> Sembunyikan total=0
     </label>
   </div>
 
-  <!-- KPI -->
+  <!-- Stock Summary (6 cards: WH Pusat/Bali/Jakarta + Retail/Consig/Global) -->
+  <div class="kpi-grid" id="scStockSummary" style="grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:10px;"></div>
+
+  <!-- GAP Analysis KPI (4 cards) -->
   <div class="kpi-grid" id="scKpi" style="grid-template-columns:repeat(4,1fr);"></div>
 
   <!-- Table -->
@@ -3980,22 +3993,7 @@ function scRender() {
 
     scFiltered = rows;
 
-    // KPI
-    var totalArticles = rows.length;
-    var totalStock = rows.reduce(function(s,r){ return s + r.total; }, 0);
-    var zeroCount = rows.filter(function(r){ return r.total === 0; }).length;
-    var negCount = rows.filter(function(r){ return r.total < 0; }).length;
-    var kpi = document.getElementById('scKpi');
-    if (kpi) {
-        var ent = typeof currentEntity !== 'undefined' ? currentEntity : 'DDD';
-        kpi.innerHTML =
-            '<div class="kpi-card kpi-primary"><div class="kpi-label">Total Artikel</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular">' + fmt(totalArticles) + '</span></span></div><div class="kpi-sub">' + esc(ent) + ' · ' + esc(scCurrentType) + '</div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">Total Stock</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular">' + fmt(totalStock) + '</span></span></div><div class="kpi-sub">pairs gabungan</div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">Total 0</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular" style="color:' + (zeroCount > 0 ? '#f59e0b' : 'inherit') + ';">' + fmt(zeroCount) + '</span></span></div><div class="kpi-sub">Artikel habis</div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">Minus</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular" style="color:' + (negCount > 0 ? '#ef4444' : 'inherit') + ';">' + fmt(negCount) + '</span></span></div><div class="kpi-sub">Artikel stock &lt; 0</div></div>';
-    }
-
-    // Monthly sales columns (master-style) — Jan..current month of current year
+    // Monthly sales setup (master-style)
     var nowMonth = new Date().getMonth();
     var monthNames = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
     var monthCols = [];
@@ -4003,6 +4001,91 @@ function scRender() {
     var scChannel = (scCurrentType === 'online') ? 'online' : 'retail';
     var salesMap = (typeof window.scSalesMap !== 'undefined' && window.scSalesMap[scChannel]) ? window.scSalesMap[scChannel] : {};
     function getSalesQty(kk, mIdx) { var m = salesMap[String(kk).toUpperCase()]; return m ? (m[mIdx] || 0) : 0; }
+
+    // Compute avg sales + GAP classification per row
+    var nMonths = Math.max(1, monthCols.length);
+    rows.forEach(function(r) {
+        var totalSales = 0;
+        monthCols.forEach(function(mi){ totalSales += getSalesQty(r.kode_kecil, mi); });
+        r.totalSales = totalSales;
+        r.avgMonthly = totalSales / nMonths;
+        r.gap = r.total - r.avgMonthly; // stock - expected 1 month demand
+        // classify
+        if (r.avgMonthly === 0 && r.total > 0) r.status = 'dead';
+        else if (r.gap < 0) r.status = 'understock';
+        else if (r.gap < r.avgMonthly) r.status = 'tipis';
+        else r.status = 'aman';
+        // TW (Turnover Weeks): stock / (avg monthly / 4.33)
+        r.tw = r.avgMonthly > 0 ? r.total / (r.avgMonthly / 4.33) : (r.total > 0 ? 999 : 0);
+        // TO (Turnover Months): stock / avg monthly
+        r.to = r.avgMonthly > 0 ? r.total / r.avgMonthly : (r.total > 0 ? 999 : 0);
+    });
+
+    // Apply GAP filter (must run AFTER computation but BEFORE final render)
+    var gapFilter = (document.getElementById('scGapFilter') || {}).value || '';
+    if (gapFilter) rows = rows.filter(function(r){ return r.status === gapFilter; });
+    scFiltered = rows;
+
+    // Summary cards (6): WH Pusat (Jatim), WH Bali, WH Jakarta, Retail, Consig, Global
+    var ent = typeof currentEntity !== 'undefined' ? currentEntity : 'DDD';
+    var aggWH = { 'Jawa Timur':0, 'Bali':0, 'Jakarta':0 };
+    var aggRetail = 0, aggConsig = 0;
+    var entData = (allData || {})[ent] || {};
+    (entData.warehouse || []).forEach(function(it) {
+        if (!it.store_stock) return;
+        Object.keys(it.store_stock).forEach(function(wh) {
+            var wl = wl = wh.toLowerCase();
+            if (wl.indexOf('online bali') !== -1 || wl.indexOf('online jakarta') !== -1 || wl.indexOf('online jkt') !== -1) return;
+            var qty = Number(it.store_stock[wh]) || 0;
+            if (wl.indexOf('bali') !== -1 || wl.indexOf('gatsu') !== -1) aggWH['Bali'] += qty;
+            else if (wl.indexOf('jakarta') !== -1 || wl.indexOf('pluit') !== -1) aggWH['Jakarta'] += qty;
+            else if (wl.indexOf('pusat') !== -1 || wl.indexOf('surabaya') !== -1) aggWH['Jawa Timur'] += qty;
+        });
+    });
+    (entData.retail || []).forEach(function(it) {
+        if (!it.store_stock) return;
+        Object.keys(it.store_stock).forEach(function(s) {
+            var sl = s.toLowerCase();
+            if (sl.indexOf('warehouse') !== -1) return;
+            aggRetail += Number(it.store_stock[s]) || 0;
+        });
+    });
+    (typeof consignmentStockItems !== 'undefined' ? consignmentStockItems : []).forEach(function(it){
+        if (String(it.entity || '').toUpperCase() !== ent.toUpperCase()) return;
+        if (!it.store_stock) return;
+        Object.values(it.store_stock).forEach(function(v){ aggConsig += Number(v) || 0; });
+    });
+    var aggGlobal = aggWH['Jawa Timur'] + aggWH['Bali'] + aggWH['Jakarta'] + aggRetail + aggConsig;
+
+    var summaryEl = document.getElementById('scStockSummary');
+    if (summaryEl) {
+        function sumCard(label, icon, value, color) {
+            return '<div class="kpi-card" style="border-left:3px solid ' + color + ';"><div class="kpi-label">' + icon + ' ' + label + '</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular" style="color:' + color + ';">' + fmt(value) + '</span></span></div></div>';
+        }
+        summaryEl.innerHTML =
+            sumCard('WH Pusat', '🏭', aggWH['Jawa Timur'], '#b45309') +
+            sumCard('WH Bali',  '🏭', aggWH['Bali'], '#059669') +
+            sumCard('WH Jakarta','🏭', aggWH['Jakarta'], '#1d4ed8') +
+            sumCard('Retail',   '🏪', aggRetail, '#0e7490') +
+            sumCard('Consig',   '📦', aggConsig, '#be185d') +
+            sumCard('Global',   '🌍', aggGlobal, '#4c1d95');
+    }
+
+    // GAP Analysis KPI (4 cards) — based on computed status
+    var cnt = { understock:0, tipis:0, aman:0, dead:0 };
+    scFiltered.forEach(function(r){ if (cnt[r.status] != null) cnt[r.status]++; });
+    var kpi = document.getElementById('scKpi');
+    if (kpi) {
+        function kpiCard(status, icon, label, desc, color) {
+            var active = gapFilter === status ? 'box-shadow:0 0 0 2px ' + color + ';' : '';
+            return '<div class="kpi-card" onclick="document.getElementById(\'scGapFilter\').value=\'' + status + '\';scRender();" style="cursor:pointer;border-left:3px solid ' + color + ';' + active + '"><div class="kpi-label">' + icon + ' ' + label + '</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular" style="color:' + color + ';">' + fmt(cnt[status]) + '</span></span></div><div class="kpi-sub">' + desc + '</div></div>';
+        }
+        kpi.innerHTML =
+            kpiCard('understock', '🔴', 'Understock', 'GAP < 0', '#dc2626') +
+            kpiCard('tipis',      '🟡', 'Tipis',      '0 ≤ GAP < AvgSales', '#d97706') +
+            kpiCard('aman',       '🟢', 'Aman',       'GAP ≥ AvgSales', '#16a34a') +
+            kpiCard('dead',       '💀', 'Dead Stock', 'AvgSales=0 & Stock>0', '#3b82f6');
+    }
 
     // Build table header with size + sales-per-month columns
     var thead = document.getElementById('scThead');
@@ -4018,11 +4101,17 @@ function scRender() {
         sizeCols.forEach(function(sz){ h += '<th class="center">' + esc(sz) + '</th>'; });
         h += '<th class="center" style="background:#003c53;">Stock</th>';
         monthCols.forEach(function(mi){ h += '<th class="center" style="background:#D4A24C;color:#fff;">' + monthNames[mi] + '</th>'; });
-        h += '<th class="center" style="background:#D4A24C;color:#fff;">Σ Sales</th></tr>';
+        h += '<th class="center" style="background:#D4A24C;color:#fff;">Σ Sales</th>';
+        h += '<th class="center" style="background:#1f2937;color:#fff;" title="Avg Sales/bulan = Σ Sales / ' + nMonths + ' bulan">Avg/bln</th>';
+        h += '<th class="center" style="background:#1f2937;color:#fff;" title="GAP = Stock − Avg Sales/bulan">GAP</th>';
+        h += '<th class="center" style="background:#1f2937;color:#fff;" title="Turnover Weeks = Stock / (AvgMonthly / 4.33)">TW</th>';
+        h += '<th class="center" style="background:#1f2937;color:#fff;" title="Turnover Months = Stock / AvgMonthly">TO</th>';
+        h += '<th class="center" style="background:#1f2937;color:#fff;">Status</th>';
+        h += '</tr>';
         thead.innerHTML = h;
     }
 
-    var totalCols = 7 + sizeCols.length + 1 + monthCols.length + 1;
+    var totalCols = 7 + sizeCols.length + 1 + monthCols.length + 1 + 5;
     var tbody = document.getElementById('scTbody');
     if (tbody) {
         if (!rows.length) {
@@ -4047,6 +4136,12 @@ function scRender() {
                     var scls = q === 0 ? 'color:var(--fg-soft);' : 'color:var(--navy);font-weight:600;';
                     salesCells += '<td class="center" style="' + scls + 'font-variant-numeric:tabular-nums;background:rgba(212,162,76,0.08);">' + (q === 0 ? '—' : fmt(q)) + '</td>';
                 });
+                var statusColors = { understock:'#dc2626', tipis:'#d97706', aman:'#16a34a', dead:'#3b82f6' };
+                var statusLabels = { understock:'🔴 Under', tipis:'🟡 Tipis', aman:'🟢 Aman', dead:'💀 Dead' };
+                var sColor = statusColors[r.status] || '#6b7280';
+                var gapCls = r.gap < 0 ? 'color:#dc2626;font-weight:700;' : (r.gap === 0 ? 'color:var(--fg-soft);' : 'color:#16a34a;');
+                var twCls = r.tw < 2 ? 'color:#dc2626;' : (r.tw < 4 ? 'color:#d97706;' : 'color:#16a34a;');
+                var toCls = r.to < 1 ? 'color:#dc2626;' : (r.to < 2 ? 'color:#d97706;' : 'color:#16a34a;');
                 return '<tr>' +
                     '<td style="font-family:ui-monospace,monospace;font-size:11px;">' + esc(String(r.kode || '—').toUpperCase()) + '</td>' +
                     '<td style="font-family:ui-monospace,monospace;font-size:11px;color:var(--fg-muted);">' + esc(String(r.kode_kecil).toUpperCase()) + '</td>' +
@@ -4059,6 +4154,11 @@ function scRender() {
                     '<td class="center" style="' + totalCls + 'background:var(--navy-soft);">' + fmt(r.total) + '</td>' +
                     salesCells +
                     '<td class="center" style="font-weight:700;color:var(--gold);background:rgba(212,162,76,0.18);">' + (salesSum === 0 ? '—' : fmt(salesSum)) + '</td>' +
+                    '<td class="center" style="color:var(--fg-muted);font-variant-numeric:tabular-nums;">' + (r.avgMonthly > 0 ? r.avgMonthly.toFixed(1) : '—') + '</td>' +
+                    '<td class="center" style="' + gapCls + 'font-variant-numeric:tabular-nums;">' + (r.gap > 0 ? '+' : '') + fmt(Math.round(r.gap)) + '</td>' +
+                    '<td class="center" style="' + twCls + 'font-variant-numeric:tabular-nums;">' + (r.tw >= 999 ? '∞' : r.tw.toFixed(1)) + '</td>' +
+                    '<td class="center" style="' + toCls + 'font-variant-numeric:tabular-nums;">' + (r.to >= 999 ? '∞' : r.to.toFixed(1)) + '</td>' +
+                    '<td class="center"><span style="display:inline-block;padding:2px 8px;border-radius:3px;background:' + sColor + ';color:#fff;font-size:9.5px;font-weight:700;">' + (statusLabels[r.status] || '—') + '</span></td>' +
                     '</tr>';
             }).join('');
             if (rows.length > cap) {
