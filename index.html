@@ -955,8 +955,8 @@ html, body {
       <select id="gfTier" class="filter-select" onchange="gfOnChange('tier')"><option value="">Semua</option></select>
     </div>
     <div class="filter-group">
-      <label class="filter-label" for="gfVer">Ver</label>
-      <select id="gfVer" class="filter-select" onchange="gfOnChange('version')"><option value="">Semua</option></select>
+      <label class="filter-label" for="gfVersion">Ver</label>
+      <select id="gfVersion" class="filter-select" onchange="gfOnChange('version')"><option value="">Semua</option></select>
     </div>
     <div class="filter-group flex">
       <label class="filter-label" for="gfSearch">Search SKU</label>
@@ -4137,7 +4137,7 @@ function gfPopulateDependentFilters() {
     fill('gfTier', tiers, function(a,b){ return (parseInt(a)||0) - (parseInt(b)||0); });
     fill('gfGender', genders);
     fill('gfSeries', series);
-    fill('gfVer', versions, function(a,b){ return (parseInt(a)||0) - (parseInt(b)||0); });
+    fill('gfVersion', versions, function(a,b){ return (parseInt(a)||0) - (parseInt(b)||0); });
     gfPopulateStoreDropdown();
 }
 
