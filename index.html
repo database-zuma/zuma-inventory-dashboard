@@ -1088,7 +1088,13 @@ html, body {
 </section>
 <section class="tab-content" data-tab="stockcontrol">
 
-  <!-- Quick option: hide total=0 + GAP status filter -->
+  <!-- View Mode Toggle -->
+  <div style="display:flex;gap:8px;margin-bottom:10px;">
+    <button id="scViewSku" class="btn" onclick="scSwitchView('sku')" style="padding:6px 14px;font-size:12px;">Analysis By SKU</button>
+    <button id="scViewKK" class="btn btn-primary" onclick="scSwitchView('kodeKecil')" style="padding:6px 14px;font-size:12px;">Analysis By Kode Kecil</button>
+  </div>
+
+  <!-- Filters: GAP + TW + TO + hide-zero -->
   <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
       <label class="filter-label" style="margin:0;">GAP Status</label>
@@ -1098,6 +1104,22 @@ html, body {
         <option value="tipis">🟡 Tipis</option>
         <option value="aman">🟢 Aman</option>
         <option value="dead">💀 Dead Stock</option>
+      </select>
+      <label class="filter-label" style="margin:0;">TW Status</label>
+      <select id="scTwFilter" class="filter-select" onchange="scRender()" style="min-width:140px;">
+        <option value="">Semua</option>
+        <option value="critical">&lt;2 (Critical)</option>
+        <option value="low">2-4 (Low)</option>
+        <option value="normal">4-8 (Normal)</option>
+        <option value="high">&gt;8 (High)</option>
+      </select>
+      <label class="filter-label" style="margin:0;">TO Status</label>
+      <select id="scToFilter" class="filter-select" onchange="scRender()" style="min-width:140px;">
+        <option value="">Semua</option>
+        <option value="critical">&lt;1 (Critical)</option>
+        <option value="low">1-2 (Low)</option>
+        <option value="normal">2-4 (Normal)</option>
+        <option value="high">&gt;4 (High)</option>
       </select>
     </div>
     <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--fg-muted);">
@@ -1118,9 +1140,9 @@ html, body {
         <div class="card-title" id="scTableTitle">Control Stock Retail — Per Kode Kecil</div>
         <div class="card-meta" id="scCountInfo">—</div>
       </div>
-      <button class="btn btn-primary" onclick="scExportCSV()">
+      <button class="btn btn-primary" onclick="scExportExcel()">
         <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>
-        Export CSV
+        Export Excel
       </button>
     </div>
     <div class="table-wrap" style="max-height:68vh;overflow:auto;">
@@ -3864,12 +3886,28 @@ function invExportCSV() {
 // ===================================================================
 var scCurrentType = 'retail';
 var scFiltered = [];
+var scViewMode = 'kodeKecil'; // 'sku' or 'kodeKecil'
+
+function scUpdateTitle() {
+    var el = document.getElementById('scTableTitle'); if (!el) return;
+    var base = 'Control Stock ' + (scCurrentType === 'online' ? 'Online' : 'Retail');
+    el.textContent = base + ' — Per ' + (scViewMode === 'sku' ? 'SKU' : 'Kode Kecil');
+}
+
+function scSwitchView(mode) {
+    scViewMode = mode;
+    var btnSku = document.getElementById('scViewSku');
+    var btnKK = document.getElementById('scViewKK');
+    if (btnSku) btnSku.classList.toggle('btn-primary', mode === 'sku');
+    if (btnKK) btnKK.classList.toggle('btn-primary', mode === 'kodeKecil');
+    scUpdateTitle();
+    scRender();
+}
 
 function scSwitchType(type) {
     scCurrentType = type;
     document.querySelectorAll('.tab-btn[data-sctype]').forEach(function(b){ b.classList.toggle('active', b.dataset.sctype === type); });
-    var title = type === 'retail' ? 'Control Stock Retail — Per Kode Kecil' : 'Control Stock Online — Per Kode Kecil';
-    var el = document.getElementById('scTableTitle'); if (el) el.textContent = title;
+    scUpdateTitle();
     scPopulateFilters();
     scRender();
 }
@@ -3936,10 +3974,14 @@ function scRender() {
     var byKK = {};
     function ensureRow(it) {
         var kk = (it.kode_kecil || '').toUpperCase();
-        if (!kk) return null;
-        if (!byKK[kk]) {
-            byKK[kk] = {
+        var sku = (it.sku || kk).toUpperCase();
+        var key = scViewMode === 'sku' ? sku : kk;
+        if (!key) return null;
+        if (!byKK[key]) {
+            byKK[key] = {
+                sku: sku,
                 kode_kecil: kk,
+                size: scViewMode === 'sku' ? (it.size || '') : '',
                 kode: (it.kode || '').toUpperCase(),
                 name: it.name || '',
                 tier: it.tier != null ? String(it.tier) : '',
@@ -3951,7 +3993,7 @@ function scRender() {
                 stokRetail: 0, stokConsig: 0
             };
         }
-        return byKK[kk];
+        return byKK[key];
     }
 
     // Aggregate warehouse (DDD+LJBB+MBB+UBB)
@@ -4041,9 +4083,27 @@ function scRender() {
         r.to = r.avgMonthly > 0 ? r.stokRetail / r.avgMonthly : (r.stokRetail > 0 ? 999 : 0);
     });
 
-    // Apply GAP filter (must run AFTER computation but BEFORE final render)
+    // Apply GAP / TW / TO filters (must run AFTER computation but BEFORE final render)
     var gapFilter = (document.getElementById('scGapFilter') || {}).value || '';
     if (gapFilter) rows = rows.filter(function(r){ return r.status === gapFilter; });
+    var twFilter = (document.getElementById('scTwFilter') || {}).value || '';
+    if (twFilter) rows = rows.filter(function(r){
+        var tw = r.tw;
+        if (twFilter === 'critical') return tw < 2;
+        if (twFilter === 'low')      return tw >= 2 && tw < 4;
+        if (twFilter === 'normal')   return tw >= 4 && tw < 8;
+        if (twFilter === 'high')     return tw >= 8;
+        return true;
+    });
+    var toFilter = (document.getElementById('scToFilter') || {}).value || '';
+    if (toFilter) rows = rows.filter(function(r){
+        var to = r.to;
+        if (toFilter === 'critical') return to < 1;
+        if (toFilter === 'low')      return to >= 1 && to < 2;
+        if (toFilter === 'normal')   return to >= 2 && to < 4;
+        if (toFilter === 'high')     return to >= 4;
+        return true;
+    });
     scFiltered = rows;
 
     // Summary cards (6): WH Pusat (Jatim), WH Bali, WH Jakarta, Retail, Consig, Global
@@ -4107,17 +4167,22 @@ function scRender() {
             kpiCard('dead',       '💀', 'Dead Stock', 'AvgSales=0 & Stock>0', '#3b82f6');
     }
 
-    // Build table header — MASTER style: Kode Kecil | Nama | Series | Gender | Tier | [Jan..Apr] | Avg/Bln | WH Pusat | WH Bali | WH Jkt | WH Total | Stok Retail | Stok Consig | Stok Global | GAP | TW | TO | Status
+    // Build table header — MASTER style
     var thead = document.getElementById('scThead');
     if (thead) {
         var goldBg = 'background:rgba(212,162,76,0.15);color:var(--navy);';
         var navyBg = 'background:#002A3A;color:#fff;';
-        var h = '<tr>' +
-            '<th style="text-align:left;">Kode Kecil</th>' +
-            '<th style="text-align:left;">Nama Barang</th>' +
-            '<th class="center">Series</th>' +
-            '<th class="center">Gender</th>' +
-            '<th class="center">Tier</th>';
+        var h = '<tr>';
+        if (scViewMode === 'sku') {
+            h += '<th style="text-align:left;">Kode Barang</th>' +
+                 '<th class="center">Size</th>';
+        } else {
+            h += '<th style="text-align:left;">Kode Kecil</th>';
+        }
+        h += '<th style="text-align:left;">Nama Barang</th>' +
+             '<th class="center">Series</th>' +
+             '<th class="center">Gender</th>' +
+             '<th class="center">Tier</th>';
         monthCols.forEach(function(mName){ h += '<th class="center" style="' + goldBg + '">' + ((monthNameMap[mName] || mName).toUpperCase()) + '</th>'; });
         h += '<th class="center" style="' + goldBg + '" title="Avg Sales/bulan">AVG/BLN</th>';
         h += '<th class="center">WH Pusat</th>';
@@ -4135,7 +4200,8 @@ function scRender() {
         thead.innerHTML = h;
     }
 
-    var totalCols = 5 + monthCols.length + 1 + 3 + 4 + 4;
+    var baseCols = scViewMode === 'sku' ? 6 : 5; // extra Size column in SKU mode
+    var totalCols = baseCols + monthCols.length + 1 + 3 + 4 + 4;
     var tbody = document.getElementById('scTbody');
     if (tbody) {
         if (!rows.length) {
@@ -4161,8 +4227,15 @@ function scRender() {
                     var cls = v < 0 ? 'color:#ef4444;font-weight:700;' : (v === 0 ? 'color:var(--fg-soft);' : (highlight ? 'font-weight:700;' : ''));
                     return '<td class="center" style="' + cls + bg + 'font-variant-numeric:tabular-nums;">' + (v === 0 ? '—' : fmt(v)) + '</td>';
                 }
+                var firstCols;
+                if (scViewMode === 'sku') {
+                    firstCols = '<td style="font-family:ui-monospace,monospace;font-size:11px;font-weight:600;">' + esc(String(r.kode_kecil).toUpperCase()) + '</td>' +
+                                '<td class="center" style="font-family:ui-monospace,monospace;font-size:11px;">' + esc(r.size || '—') + '</td>';
+                } else {
+                    firstCols = '<td style="font-family:ui-monospace,monospace;font-size:11px;font-weight:600;">' + esc(String(r.kode_kecil).toUpperCase()) + '</td>';
+                }
                 return '<tr>' +
-                    '<td style="font-family:ui-monospace,monospace;font-size:11px;font-weight:600;">' + esc(String(r.kode_kecil).toUpperCase()) + '</td>' +
+                    firstCols +
                     '<td>' + esc(r.name) + '</td>' +
                     '<td class="center">' + esc(r.series || '—') + '</td>' +
                     '<td class="center">' + esc(r.gender || '—') + '</td>' +
@@ -4196,29 +4269,51 @@ function scRender() {
     }
 }
 
-function scExportCSV() {
+function scExportExcel() {
+    if (typeof XLSX === 'undefined') { alert('SheetJS library not loaded. Please refresh the page.'); return; }
     if (!scFiltered || !scFiltered.length) { alert('Tidak ada data untuk export'); return; }
-    // Collect all sizes across rows
-    var allSizes = {};
-    scFiltered.forEach(function(r){ Object.keys(r.sizeStock).forEach(function(s){ allSizes[s] = true; }); });
-    var sizeCols = Object.keys(allSizes).sort(function(a,b){ return (parseInt(a)||0) - (parseInt(b)||0); });
-    var headers = ['Kode','Kode Kecil','Nama Barang','Tier','Gender','Series','Tipe','Version'];
-    sizeCols.forEach(function(sz){ headers.push('Size ' + sz); });
-    headers.push('Total');
-    function escv(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
-    var out = [headers.map(escv).join(',')];
-    scFiltered.forEach(function(r) {
-        var row = [r.kode, r.kode_kecil, r.name, r.tier, r.gender, r.series, r.tipe || '', r.version || ''];
-        sizeCols.forEach(function(sz){ row.push(r.sizeStock[sz] || 0); });
-        row.push(r.total);
-        out.push(row.map(escv).join(','));
+
+    var scChannel = (scCurrentType === 'online') ? 'online' : 'retail';
+    var salesMap = (typeof window.scSalesMap !== 'undefined' && window.scSalesMap[scChannel]) ? window.scSalesMap[scChannel] : {};
+    var monthCols = salesMap._months || ['jan','feb','mar'];
+    var monthNameMap = { jan:'Jan', feb:'Feb', mar:'Mar', apr:'Apr', mei:'Mei', may:'Mei', jun:'Jun', jul:'Jul', agu:'Agu', aug:'Agu', sep:'Sep', okt:'Okt', oct:'Okt', nov:'Nov', des:'Des', dec:'Des' };
+    var mLabels = monthCols.map(function(m){ return (monthNameMap[m] || m).toUpperCase(); });
+    var statusLabels = { understock: 'Understock', tipis: 'Tipis', aman: 'Aman', dead: 'Dead Stock' };
+
+    var rows = scFiltered.map(function(r) {
+        var row = {};
+        if (scViewMode === 'sku') {
+            row['KODE BARANG'] = r.kode_kecil || '';
+            row['SIZE'] = r.size || '';
+        } else {
+            row['KODE KECIL'] = r.kode_kecil || '';
+        }
+        row['NAMA BARANG'] = r.name || '';
+        row['SERIES'] = r.series || '';
+        row['GENDER'] = r.gender || '';
+        row['TIER'] = r.tier || '';
+        (r.monthlySales || []).forEach(function(v, i) { row[mLabels[i] || ('M' + (i+1))] = v; });
+        row['AVG/BLN'] = Math.round((r.avgMonthly || 0) * 100) / 100;
+        row['WH PUSAT'] = r.WHS || 0;
+        row['WH BALI']  = r.WHB || 0;
+        row['WH JKT']   = r.WHJ || 0;
+        row['WH TOTAL'] = r.whTotal || 0;
+        row['STOK RETAIL'] = r.stokRetail || 0;
+        row['STOK CONSIG'] = r.stokConsig || 0;
+        row['STOK GLOBAL'] = r.globalStock || 0;
+        row['GAP'] = Math.round(r.gap || 0);
+        row['TW']  = r.tw >= 999 ? '∞' : (Math.round((r.tw || 0) * 100) / 100);
+        row['TO']  = r.to >= 999 ? '∞' : (Math.round((r.to || 0) * 100) / 100);
+        row['STATUS'] = statusLabels[r.status] || '';
+        return row;
     });
-    var blob = new Blob(['﻿' + out.join('\n')], { type: 'text/csv;charset=utf-8' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    var ent = typeof currentEntity !== 'undefined' ? currentEntity : 'DDD';
-    a.download = 'stockcontrol_' + ent + '_' + scCurrentType + '_' + new Date().toISOString().slice(0,10) + '.csv';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+
+    var ws = XLSX.utils.json_to_sheet(rows);
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Stock Control');
+    var dateStr = new Date().toISOString().slice(0, 10);
+    var modeLabel = scViewMode === 'sku' ? 'sku' : 'kodekecil';
+    XLSX.writeFile(wb, 'StockControl_' + modeLabel + '_' + scCurrentType + '_' + dateStr + '.xlsx');
 }
 
 
