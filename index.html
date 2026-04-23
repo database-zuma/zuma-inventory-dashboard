@@ -4099,14 +4099,14 @@ function _gfGetSourceItems() {
     return entData[gf.channel] || [];
 }
 
-// Normalize version: strip trailing .0 / .00, drop 0 / '000' / empty / NaN
+// Normalize version: strip trailing .0 / .00, drop empty/NaN/negative. Preserves 0.
 function _normalizeVersion(v) {
     if (v == null || v === '') return '';
     var s = String(v).trim();
     if (!s) return '';
     var n = Number(s);
-    if (!isFinite(n) || n <= 0) return '';
-    return String(Math.floor(n)); // integer form, drops '.00' etc.
+    if (!isFinite(n) || n < 0) return '';
+    return String(Math.floor(n)); // integer form, 0 stays as "0", 3.00 → "3"
 }
 
 function gfPopulateDependentFilters() {
@@ -4117,7 +4117,7 @@ function gfPopulateDependentFilters() {
         if (it.gender) genders[it.gender] = true;
         if (it.series) series[it.series] = true;
         var vn = _normalizeVersion(it.version);
-        if (vn) versions[vn] = true;
+        if (vn && vn !== '0') versions[vn] = true;  // Exclude 0 from dropdown (keep in row display)
         if (it.store_stock) {
             Object.keys(it.store_stock).forEach(function(s){
                 stores[s] = true;
