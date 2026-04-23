@@ -3909,7 +3909,7 @@ function scRender() {
                 gender: it.gender || '',
                 series: it.series || '',
                 tipe: it.tipe || '',
-                version: it.version || '',
+                version: (typeof _normalizeVersion === 'function') ? _normalizeVersion(it.version) : (it.version || ''),
                 sizeStock: {},
                 total: 0,
                 sizes: {}
