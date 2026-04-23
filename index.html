@@ -1053,50 +1053,12 @@ html, body {
 
 </section>
 <section class="tab-content" data-tab="maxstock">
-<div class="tab-nav">
-    <button class="tab-btn active" data-mstype="warehouse" onclick="switchMaxStockTab('warehouse')">Warehouse</button>
-    <button class="tab-btn" data-mstype="retail" onclick="switchMaxStockTab('retail')">Retail Store</button>
-  </div>
-
-  <!-- WH Filter -->
-  <div class="filter-bar" id="msWHFilters">
-    <div class="filter-group">
-      <label class="filter-label">Area</label>
-      <select id="msWHFilterArea" class="filter-select" onchange="updateMaxStockAnalysis()">
-        <option value="">Semua Area</option>
-        <option value="Bali">Bali</option>
-        <option value="Online Bali">Online Bali</option>
-        <option value="Jakarta">Jakarta</option>
-        <option value="Jawa Timur">Jawa Timur</option>
-      </select>
-    </div>
-    <div class="filter-group">
-      <label class="filter-label">Fill Rate</label>
-      <select id="msWHFilterFillRate" class="filter-select" onchange="updateMaxStockAnalysis()">
-        <option value="">Semua</option><option value="over">Overflow (&gt;100%)</option><option value="high">High (80-100%)</option><option value="medium">Medium (50-80%)</option><option value="low">Low (&lt;50%)</option>
-      </select>
-    </div>
-    <div class="filter-group"><label class="filter-label">&nbsp;</label><button class="btn" onclick="resetWHFilters()">↺ Reset</button></div>
-  </div>
-
-  <!-- Retail Filter -->
-  <div class="filter-bar" id="msFilters" style="display:none;">
-    <div class="filter-group">
-      <label class="filter-label">Area</label>
-      <select id="msFilterArea" class="filter-select" onchange="updateStoreDropdown(); updateMaxStockAnalysis()"><option value="">Semua Area</option></select>
-    </div>
-    <div class="filter-group">
-      <label class="filter-label">Store</label>
-      <select id="msFilterStore" class="filter-select" onchange="updateMaxStockAnalysis()"><option value="">Semua Store</option></select>
-    </div>
-    <div class="filter-group">
-      <label class="filter-label">Fill Rate</label>
-      <select id="msFilterFillRate" class="filter-select" onchange="updateMaxStockAnalysis()">
-        <option value="">Semua</option><option value="over">Overflow (&gt;100%)</option><option value="high">High (80-100%)</option><option value="medium">Medium (50-80%)</option><option value="low">Low (&lt;50%)</option>
-      </select>
-    </div>
-    <div class="filter-group"><label class="filter-label">&nbsp;</label><button class="btn" onclick="resetMSFilters()">↺ Reset</button></div>
-  </div>
+  <!-- Hidden filter stubs — max stock reads from global filter bar -->
+  <input type="hidden" id="msWHFilterArea" value="">
+  <input type="hidden" id="msWHFilterFillRate" value="">
+  <input type="hidden" id="msFilterArea" value="">
+  <input type="hidden" id="msFilterStore" value="">
+  <input type="hidden" id="msFilterFillRate" value="">
 
   <!-- KPI -->
   <div class="kpi-grid">
@@ -1685,9 +1647,18 @@ function resetMSFilters() { ['msFilterArea','msFilterStore','msFilterFillRate'].
 function resetWHFilters() { ['msWHFilterArea','msWHFilterFillRate'].forEach(function(id){ var e=document.getElementById(id); if(e)e.value=''; }); updateMaxStockAnalysis(); }
 
 function updateMaxStockAnalysis() {
+    // Sync from global filter — channel retail → retail, channel warehouse/consignment → warehouse
+    if (typeof gf !== 'undefined') currentMSType = (gf.channel === 'retail') ? 'retail' : 'warehouse';
     var isWH = (currentMSType === 'warehouse');
     var locationData = {}, tierCounts = {};
     var totalActual = 0, totalMax = 0;
+
+    // Sync hidden stubs from global filter so downstream reads get the right area/store
+    if (typeof gf !== 'undefined') {
+        var whArEl = document.getElementById('msWHFilterArea'); if (whArEl) whArEl.value = gf.area || '';
+        var rtArEl = document.getElementById('msFilterArea');   if (rtArEl) rtArEl.value = gf.area || '';
+        var rtStEl = document.getElementById('msFilterStore');  if (rtStEl) rtStEl.value = gf.store || '';
+    }
 
     if (isWH) {
         var whStock = {}, whTiers = {}, whEntityStock = {};
