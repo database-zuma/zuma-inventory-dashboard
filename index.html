@@ -1726,10 +1726,24 @@ function updateMaxStockAnalysis() {
     }
 
     var fr = totalMax > 0 ? (totalActual / totalMax * 100) : 0;
+    var remaining = totalMax - totalActual;
     document.getElementById('msTotalMax').textContent = fmt(totalMax);
     document.getElementById('msTotalActual').textContent = fmt(totalActual);
-    document.getElementById('msFillRate').textContent = fr.toFixed(1) + '%';
-    document.getElementById('msRemaining').textContent = fmt(totalMax - totalActual);
+    var frEl = document.getElementById('msFillRate');
+    if (frEl) {
+        frEl.textContent = fr.toFixed(1) + '%';
+        frEl.style.color = fr > 100 ? '#ef4444' : '';
+    }
+    var remEl = document.getElementById('msRemaining');
+    if (remEl) {
+        remEl.textContent = fmt(remaining);
+        remEl.style.color = remaining < 0 ? '#ef4444' : '';
+    }
+    // Update labels + sub-labels when overflow
+    var remLabel = document.querySelector('#msRemaining').closest('.kpi-card').querySelector('.kpi-label');
+    var remSub = document.querySelector('#msRemaining').closest('.kpi-card').querySelector('.kpi-sub');
+    if (remLabel) remLabel.textContent = remaining < 0 ? 'Overflow' : 'Remaining';
+    if (remSub) remSub.textContent = remaining < 0 ? 'Kelebihan di atas max' : 'Sisa kapasitas';
 
     updateFillRateChart(locationData);
     updateTierDistChart(tierCounts);
