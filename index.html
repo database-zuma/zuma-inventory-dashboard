@@ -997,11 +997,12 @@ html, body {
       <table class="data" id="invTable" style="width:100%;">
         <thead>
           <tr>
-            <th style="cursor:pointer;" onclick="invSort('kode')">Kode</th>
-            <th style="cursor:pointer;" onclick="invSort('kode_kecil')">Kode Kecil</th>
+            <th style="cursor:pointer;" onclick="invSort('kode')">Kode Kecil</th>
+            <th style="cursor:pointer;" onclick="invSort('kode_kecil')">Kode Barang</th>
             <th style="cursor:pointer;" onclick="invSort('name')">Nama Barang</th>
             <th class="center">Size</th>
             <th class="center">Tier</th>
+            <th class="center">Ver</th>
             <th class="center">Gender</th>
             <th>Series</th>
             <th class="center" id="invPartnerHdr" style="display:none;">Partner</th>
@@ -3804,15 +3805,29 @@ function invRender() {
     var totalSku = filtered.length;
     var totalStock = filtered.reduce(function(s,r){ return s + r.total; }, 0);
     var negCount = filtered.filter(function(r){ return r.total < 0; }).length;
-    var locations = {}; filtered.forEach(function(r){ if (r.loc) locations[r.loc] = true; });
+    // Count distinct stores/warehouses that have stock in current view
+    var storeSet = {};
+    items.forEach(function(it) {
+        if (!it.store_stock) return;
+        Object.keys(it.store_stock).forEach(function(s) {
+            if (area) {
+                var a = (typeof getAreaFromStore === 'function') ? getAreaFromStore(s) : '';
+                if (a !== area) return;
+            }
+            if (store && s !== store) return;
+            if ((Number(it.store_stock[s]) || 0) !== 0) storeSet[s] = true;
+        });
+    });
+    var totalStores = Object.keys(storeSet).length;
     var kpi = document.getElementById('invKpi');
     if (kpi) {
         var ent = typeof currentEntity !== 'undefined' ? currentEntity : 'DDD';
+        var storeLabel = invCurrentType === 'warehouse' ? 'WH' : (invCurrentType === 'consignment' ? 'Outlet' : 'Toko');
         kpi.innerHTML =
             '<div class="kpi-card kpi-primary"><div class="kpi-label">Total SKU</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular">' + fmt(totalSku) + '</span></span></div><div class="kpi-sub">' + esc(ent) + ' · ' + esc(invCurrentType) + '</div></div>' +
             '<div class="kpi-card"><div class="kpi-label">Total Stock</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular">' + fmt(totalStock) + '</span></span></div><div class="kpi-sub">pairs gabungan</div></div>' +
             '<div class="kpi-card"><div class="kpi-label">Minus on Hand</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular" style="color:' + (negCount > 0 ? '#ef4444' : 'inherit') + ';">' + fmt(negCount) + '</span></span></div><div class="kpi-sub">SKU dengan stock &lt; 0</div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">Lokasi Aktif</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular">' + fmt(Object.keys(locations).length > 0 ? Math.max.apply(null, Object.keys(locations).map(Number)) : 0) + '</span></span></div><div class="kpi-sub">lokasi max per SKU</div></div>';
+            '<div class="kpi-card"><div class="kpi-label">Total ' + storeLabel + '</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular">' + fmt(totalStores) + '</span></span></div><div class="kpi-sub">jumlah ' + storeLabel.toLowerCase() + ' aktif (stok ≠ 0)</div></div>';
     }
 
     // Pagination
@@ -3824,17 +3839,18 @@ function invRender() {
     var tbody = document.getElementById('invTbody');
     if (tbody) {
         if (!filtered.length) {
-            tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--fg-soft);">Tidak ada data</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--fg-soft);">Tidak ada data</td></tr>';
         } else {
             var showPartner = invCurrentType === 'consignment';
             tbody.innerHTML = pageRows.map(function(r){
                 var totalCls = r.total < 0 ? 'color:#ef4444;font-weight:700;' : (r.total === 0 ? 'color:var(--fg-soft);' : '');
                 return '<tr>' +
-                    '<td style="font-family:ui-monospace,monospace;font-size:11px;">' + esc(r.kode || '—') + '</td>' +
-                    '<td style="font-family:ui-monospace,monospace;font-size:11px;color:var(--fg-muted);">' + esc(r.kode_kecil || '—') + '</td>' +
+                    '<td style="font-family:ui-monospace,monospace;font-size:11px;">' + esc(String(r.kode || '—').toUpperCase()) + '</td>' +
+                    '<td style="font-family:ui-monospace,monospace;font-size:11px;color:var(--fg-muted);">' + esc(String(r.kode_kecil || '—').toUpperCase()) + '</td>' +
                     '<td class="strong">' + esc(r.name) + '</td>' +
                     '<td class="center">' + esc(r.size) + '</td>' +
                     '<td class="center">' + esc(r.tier || '—') + '</td>' +
+                    '<td class="center">' + esc(r.version || '—') + '</td>' +
                     '<td class="center">' + esc(r.gender || '—') + '</td>' +
                     '<td>' + esc(r.series || '—') + '</td>' +
                     (showPartner ? '<td class="center">' + esc(r.partner || '—') + '</td>' : '') +
@@ -3865,13 +3881,13 @@ function invNext() { invCurrentPage++; invRender(); }
 function invExportCSV() {
     if (!invFiltered || !invFiltered.length) { alert('Tidak ada data untuk export'); return; }
     var showPartner = invCurrentType === 'consignment';
-    var headers = ['Kode','Kode Kecil','Nama Barang','Size','Tier','Gender','Series','Tipe','Version'];
+    var headers = ['Kode Kecil','Kode Barang','Nama Barang','Size','Tier','Version','Gender','Series','Tipe'];
     if (showPartner) headers.push('Partner');
     headers.push('Total','Lokasi');
     function escv(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
     var out = [headers.map(escv).join(',')];
     invFiltered.forEach(function(r) {
-        var row = [r.kode, r.kode_kecil, r.name, r.size, r.tier, r.gender, r.series, r.tipe || '', r.version || ''];
+        var row = [String(r.kode || '').toUpperCase(), String(r.kode_kecil || '').toUpperCase(), r.name, r.size, r.tier, r.version || '', r.gender, r.series, r.tipe || ''];
         if (showPartner) row.push(r.partner || '');
         row.push(r.total, r.loc);
         out.push(row.map(escv).join(','));
