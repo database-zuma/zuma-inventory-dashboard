@@ -1399,36 +1399,19 @@ async function loadAllData() {
         // Populate global filter dropdowns now that data is available
         try { if (typeof gfPopulateDependentFilters === 'function') gfPopulateDependentFilters(); } catch(e) { console.warn('gf populate:', e); }
 
-        // Background fetch: sales detail for Stock Control monthly sales columns
-        (function() {
-            var pfFrom = '2026-01-01';
-            var pfTo = new Date().toISOString().slice(0,10);
-            Promise.all([
-                fetchAPI('/api/sales/detail?channel=retail&from=' + pfFrom + '&to=' + pfTo).catch(function(){ return []; }),
-                fetchAPI('/api/sales/detail?channel=online&from=' + pfFrom + '&to=' + pfTo).catch(function(){ return []; })
-            ]).then(function(res) {
-                var retail = Array.isArray(res[0]) ? res[0] : (res[0].data || []);
-                var online = Array.isArray(res[1]) ? res[1] : (res[1].data || []);
-                // Build scSalesMap[channel][kode_kecil][month] = qty
-                window.scSalesMap = { retail: {}, online: {} };
-                function ingest(rows, channel) {
-                    rows.forEach(function(row) {
-                        if (!row.kode_kecil || !row.date) return;
-                        if (row.category === 'EVENT') return;
-                        var kk = String(row.kode_kecil).toUpperCase();
-                        var m = new Date(row.date).getMonth(); // 0..11
-                        if (!scSalesMap[channel][kk]) scSalesMap[channel][kk] = {};
-                        scSalesMap[channel][kk][m] = (scSalesMap[channel][kk][m] || 0) + (row.qty || 0);
-                    });
-                }
-                ingest(retail, 'retail');
-                ingest(online, 'online');
-                _scSalesLoaded = true;
-                console.log('[SC] sales loaded: retail=' + retail.length + ', online=' + online.length);
-                // Re-render if Stock Control tab is active
-                if (activeTab === 'stockcontrol' && typeof scRender === 'function') scRender();
-            }).catch(function(e){ console.warn('SC sales detail fetch:', e); });
-        })();
+        // Background fetch: sales aggregate (pre-aggregated per kode_kecil) — matches master
+        // Format: { kode_kecil_lowercase: { jan: qty, feb: qty, ... }, _months: ['jan','feb','mar'], _days: 90 }
+        Promise.all([
+            fetchAPI('/api/sales/aggregate').catch(function(){ return {}; }),
+            fetchAPI('/api/sales/aggregate-online').catch(function(){ return {}; })
+        ]).then(function(res) {
+            window.scSalesMap = { retail: res[0] || {}, online: res[1] || {} };
+            _scSalesLoaded = true;
+            var keysR = Object.keys(scSalesMap.retail).filter(function(k){ return k.charAt(0) !== '_'; }).length;
+            var keysO = Object.keys(scSalesMap.online).filter(function(k){ return k.charAt(0) !== '_'; }).length;
+            console.log('[SC] sales aggregate loaded: retail=' + keysR + ' SKUs, online=' + keysO + ' SKUs, months=' + (scSalesMap.retail._months || scSalesMap.online._months || []));
+            if (activeTab === 'stockcontrol' && typeof scRender === 'function') scRender();
+        }).catch(function(e){ console.warn('SC aggregate fetch:', e); });
 
         // Init the currently-active tab
         switchHubTab(activeTab);
@@ -4029,14 +4012,16 @@ function scRender() {
 
     scFiltered = rows;
 
-    // Monthly sales setup (master-style)
-    var nowMonth = new Date().getMonth();
-    var monthNames = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
-    var monthCols = [];
-    for (var mi = 0; mi <= nowMonth; mi++) monthCols.push(mi);
+    // Monthly sales setup — uses /api/sales/aggregate format (lowercase kode_kecil keys, month names 'jan','feb',...)
     var scChannel = (scCurrentType === 'online') ? 'online' : 'retail';
     var salesMap = (typeof window.scSalesMap !== 'undefined' && window.scSalesMap[scChannel]) ? window.scSalesMap[scChannel] : {};
-    function getSalesQty(kk, mIdx) { var m = salesMap[String(kk).toUpperCase()]; return m ? (m[mIdx] || 0) : 0; }
+    // monthCols is array of month name strings like ['jan','feb','mar','apr']
+    var monthCols = salesMap._months || ['jan','feb','mar'];
+    var monthNameMap = { jan:'Jan', feb:'Feb', mar:'Mar', apr:'Apr', mei:'Mei', may:'Mei', jun:'Jun', jul:'Jul', agu:'Agu', aug:'Agu', sep:'Sep', okt:'Okt', oct:'Okt', nov:'Nov', des:'Des', dec:'Des' };
+    function getSalesQty(kk, monthName) {
+        var m = salesMap[String(kk).toLowerCase()];
+        return m ? (m[monthName] || 0) : 0;
+    }
 
     // Compute avg sales + GAP classification per row (using globalStock as basis)
     var nMonths = Math.max(1, monthCols.length);
@@ -4133,7 +4118,7 @@ function scRender() {
             '<th class="center">Series</th>' +
             '<th class="center">Gender</th>' +
             '<th class="center">Tier</th>';
-        monthCols.forEach(function(mi){ h += '<th class="center" style="' + goldBg + '">' + monthNames[mi].toUpperCase() + '</th>'; });
+        monthCols.forEach(function(mName){ h += '<th class="center" style="' + goldBg + '">' + ((monthNameMap[mName] || mName).toUpperCase()) + '</th>'; });
         h += '<th class="center" style="' + goldBg + '" title="Avg Sales/bulan">AVG/BLN</th>';
         h += '<th class="center">WH Pusat</th>';
         h += '<th class="center">WH Bali</th>';
