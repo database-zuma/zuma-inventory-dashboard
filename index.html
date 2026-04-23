@@ -1006,8 +1006,7 @@ html, body {
             <th class="center">Gender</th>
             <th>Series</th>
             <th class="center" id="invPartnerHdr" style="display:none;">Partner</th>
-            <th class="right" style="cursor:pointer;" onclick="invSort('total')">Total ▾</th>
-            <th class="right">Lokasi</th>
+            <th class="center" style="cursor:pointer;" onclick="invSort('total')">Qty ▾</th>
           </tr>
         </thead>
         <tbody id="invTbody"></tbody>
@@ -3839,7 +3838,7 @@ function invRender() {
     var tbody = document.getElementById('invTbody');
     if (tbody) {
         if (!filtered.length) {
-            tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--fg-soft);">Tidak ada data</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--fg-soft);">Tidak ada data</td></tr>';
         } else {
             var showPartner = invCurrentType === 'consignment';
             tbody.innerHTML = pageRows.map(function(r){
@@ -3847,15 +3846,14 @@ function invRender() {
                 return '<tr>' +
                     '<td style="font-family:ui-monospace,monospace;font-size:11px;">' + esc(String(r.kode || '—').toUpperCase()) + '</td>' +
                     '<td style="font-family:ui-monospace,monospace;font-size:11px;color:var(--fg-muted);">' + esc(String(r.kode_kecil || '—').toUpperCase()) + '</td>' +
-                    '<td class="strong">' + esc(r.name) + '</td>' +
+                    '<td>' + esc(r.name) + '</td>' +
                     '<td class="center">' + esc(r.size) + '</td>' +
                     '<td class="center">' + esc(r.tier || '—') + '</td>' +
                     '<td class="center">' + esc(r.version || '—') + '</td>' +
                     '<td class="center">' + esc(r.gender || '—') + '</td>' +
                     '<td>' + esc(r.series || '—') + '</td>' +
                     (showPartner ? '<td class="center">' + esc(r.partner || '—') + '</td>' : '') +
-                    '<td class="right" style="' + totalCls + '">' + fmt(r.total) + '</td>' +
-                    '<td class="right muted">' + fmt(r.loc) + '</td>' +
+                    '<td class="center" style="' + totalCls + '">' + fmt(r.total) + '</td>' +
                     '</tr>';
             }).join('');
         }
@@ -3883,13 +3881,13 @@ function invExportCSV() {
     var showPartner = invCurrentType === 'consignment';
     var headers = ['Kode Kecil','Kode Barang','Nama Barang','Size','Tier','Version','Gender','Series','Tipe'];
     if (showPartner) headers.push('Partner');
-    headers.push('Total','Lokasi');
+    headers.push('Qty');
     function escv(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
     var out = [headers.map(escv).join(',')];
     invFiltered.forEach(function(r) {
         var row = [String(r.kode || '').toUpperCase(), String(r.kode_kecil || '').toUpperCase(), r.name, r.size, r.tier, r.version || '', r.gender, r.series, r.tipe || ''];
         if (showPartner) row.push(r.partner || '');
-        row.push(r.total, r.loc);
+        row.push(r.total);
         out.push(row.map(escv).join(','));
     });
     var blob = new Blob(['﻿' + out.join('\n')], { type: 'text/csv;charset=utf-8' });
