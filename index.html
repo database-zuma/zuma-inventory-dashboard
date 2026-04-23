@@ -1006,12 +1006,12 @@ html, body {
           <tr>
             <th style="cursor:pointer;" onclick="invSort('kode')">Kode Kecil</th>
             <th style="cursor:pointer;" onclick="invSort('kode_kecil')">Kode Barang</th>
+            <th class="center">Gender</th>
+            <th>Series</th>
             <th style="cursor:pointer;" onclick="invSort('name')">Nama Barang</th>
             <th class="center">Size</th>
             <th class="center">Tier</th>
             <th class="center">Ver</th>
-            <th class="center">Gender</th>
-            <th>Series</th>
             <th class="center" id="invPartnerHdr" style="display:none;">Partner</th>
             <th class="center" style="cursor:pointer;" onclick="invSort('total')">Qty ▾</th>
           </tr>
@@ -3718,12 +3718,12 @@ function invRender() {
                 return '<tr>' +
                     '<td style="font-family:ui-monospace,monospace;font-size:11px;">' + esc(String(r.kode || '—').toUpperCase()) + '</td>' +
                     '<td style="font-family:ui-monospace,monospace;font-size:11px;color:var(--fg-muted);">' + esc(String(r.kode_kecil || '—').toUpperCase()) + '</td>' +
+                    '<td class="center">' + esc(r.gender || '—') + '</td>' +
+                    '<td>' + esc(r.series || '—') + '</td>' +
                     '<td>' + esc(r.name) + '</td>' +
                     '<td class="center">' + esc(r.size) + '</td>' +
                     '<td class="center">' + esc(r.tier || '—') + '</td>' +
                     '<td class="center">' + esc(r.version || '—') + '</td>' +
-                    '<td class="center">' + esc(r.gender || '—') + '</td>' +
-                    '<td>' + esc(r.series || '—') + '</td>' +
                     (showPartner ? '<td class="center">' + esc(r.partner || '—') + '</td>' : '') +
                     '<td class="center" style="' + totalCls + '">' + fmt(r.total) + '</td>' +
                     '</tr>';
@@ -3751,13 +3751,13 @@ function invNext() { invCurrentPage++; invRender(); }
 function invExportCSV() {
     if (!invFiltered || !invFiltered.length) { alert('Tidak ada data untuk export'); return; }
     var showPartner = invCurrentType === 'consignment';
-    var headers = ['Kode Kecil','Kode Barang','Nama Barang','Size','Tier','Version','Gender','Series','Tipe'];
+    var headers = ['Kode Kecil','Kode Barang','Gender','Series','Nama Barang','Size','Tier','Version','Tipe'];
     if (showPartner) headers.push('Partner');
     headers.push('Qty');
     function escv(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
     var out = [headers.map(escv).join(',')];
     invFiltered.forEach(function(r) {
-        var row = [String(r.kode || '').toUpperCase(), String(r.kode_kecil || '').toUpperCase(), r.name, r.size, r.tier, r.version || '', r.gender, r.series, r.tipe || ''];
+        var row = [String(r.kode || '').toUpperCase(), String(r.kode_kecil || '').toUpperCase(), r.gender, r.series, r.name, r.size, r.tier, r.version || '', r.tipe || ''];
         if (showPartner) row.push(r.partner || '');
         row.push(r.total);
         out.push(row.map(escv).join(','));
