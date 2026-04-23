@@ -918,13 +918,13 @@ html, body {
   <!-- GLOBAL FILTER BAR (berlaku untuk semua tab) -->
   <div class="filter-bar">
     <div class="filter-group">
-      <label class="filter-label">Entity</label>
-      <div class="preset-bar" id="entityToggleBarGlobal">
-        <button class="preset-btn active entity-btn-global" data-entity="DDD">DDD</button>
-        <button class="preset-btn entity-btn-global" data-entity="MBB">MBB</button>
-        <button class="preset-btn entity-btn-global" data-entity="UBB">UBB</button>
-        <button class="preset-btn entity-btn-global" data-entity="LJBB">LJBB</button>
-      </div>
+      <label class="filter-label" for="gfEntity">Entity</label>
+      <select id="gfEntity" class="filter-select" onchange="selectEntity(this.value)">
+        <option value="DDD">DDD</option>
+        <option value="MBB">MBB</option>
+        <option value="UBB">UBB</option>
+        <option value="LJBB">LJBB</option>
+      </select>
     </div>
     <div class="filter-group">
       <label class="filter-label" for="gfChannel">Channel</label>
@@ -1258,17 +1258,13 @@ html, body {
     </div>
   </div>
 
-  <!-- COLUMN TOGGLES -->
-  <div class="filter-bar">
-    <div class="filter-group">
-      <label class="filter-label">Tampilkan kolom</label>
-      <div class="toggle-row">
-        <label class="toggle-chip on" id="sbaChipWH"><input type="checkbox" id="sbaShowWH" checked onchange="sbaUpdateChips();renderStockByArea()"> Warehouse</label>
-        <label class="toggle-chip on" id="sbaChipToko"><input type="checkbox" id="sbaShowToko" checked onchange="sbaUpdateChips();renderStockByArea()"> Retail</label>
-        <label class="toggle-chip on" id="sbaChipConsig"><input type="checkbox" id="sbaShowConsig" checked onchange="sbaUpdateChips();renderStockByArea()"> Consignment</label>
-        <span class="legend"><span class="dot" style="background:#ef4444"></span>≤0 <span class="dot" style="background:#f59e0b;margin-left:6px"></span>1–5 <span class="dot" style="background:#00E273;margin-left:6px"></span>≥6</span>
-      </div>
-    </div>
+  <!-- Hidden checkboxes (drive sba rendering — kolom selalu tampil semua) -->
+  <input type="checkbox" id="sbaShowWH" checked style="display:none;">
+  <input type="checkbox" id="sbaShowToko" checked style="display:none;">
+  <input type="checkbox" id="sbaShowConsig" checked style="display:none;">
+
+  <div style="display:flex;justify-content:flex-end;margin-bottom:8px;font-size:10px;color:var(--fg-soft);">
+    <span><span style="display:inline-block;width:8px;height:8px;background:#ef4444;border-radius:50%;vertical-align:middle;margin-right:3px;"></span>≤0 <span style="display:inline-block;width:8px;height:8px;background:#f59e0b;border-radius:50%;vertical-align:middle;margin:0 3px 0 8px;"></span>1–5 <span style="display:inline-block;width:8px;height:8px;background:#00E273;border-radius:50%;vertical-align:middle;margin:0 3px 0 8px;"></span>≥6</span>
   </div>
 
   <!-- KPI -->
@@ -4224,7 +4220,7 @@ var _origSelectEntity = typeof selectEntity === 'function' ? selectEntity : null
 function selectEntity(entity) {
     gf.entity = entity;
     if (typeof currentEntity !== 'undefined') currentEntity = entity;
-    document.querySelectorAll('.entity-btn-global').forEach(function(b){ b.classList.toggle('active', b.dataset.entity === entity); });
+    var dd = document.getElementById('gfEntity'); if (dd && dd.value !== entity) dd.value = entity;
     gfPopulateDependentFilters();
     // Also call legacy per-tab handlers for tabs with their own entity refresh logic
     try { if (typeof selectEntity_stockbyarea === 'function') selectEntity_stockbyarea(entity); } catch(e) {}
