@@ -1506,6 +1506,8 @@ async function loadAllData() {
             if (el) el.textContent = d.toLocaleDateString('id-ID', { day:'numeric', month:'long', year:'numeric' });
         }
         _dataLoaded = true;
+        // Populate global filter dropdowns now that data is available
+        try { if (typeof gfPopulateDependentFilters === 'function') gfPopulateDependentFilters(); } catch(e) { console.warn('gf populate:', e); }
         // Redistribusi data — separate endpoint, load on-demand when tab first opened
         // but we can trigger it in bg here
         fetchAPI('/api/redistribution?t=' + Date.now()).then(d => {
