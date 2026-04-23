@@ -1,29 +1,36 @@
-# Zuma Inventory Core
+# Zuma Inventory Analytics
 
-Standalone dashboard Inventory Core (Retail / Warehouse / Consignment) — landing langsung di view inventory dari master dashboard.
+Hub dashboard — 7 tab inventory dalam 1 URL. Visual style mengikuti `zuma-sales-dashboard` (navy + accent green, top tab-nav, sales-style).
 
 ## URL
 - Production: https://database-zuma.github.io/zuma-inventory-dashboard/
 
-## Approach: full-copy (Opsi Y)
+## 7 Tab
+| Tab | Source repo | Visual |
+|-----|-------------|--------|
+| **Inventory** | `./inventory.html` (full-copy master, Opsi Y) | Master style (Poppins, gradient) |
+| **Stock Control** | iframe → `zuma-stockcontrol-dashboard` | Master style |
+| **Max Stock** | iframe → `zuma-maxstock-dashboard` | ✅ Sales-style |
+| **Redistribusi** | iframe → `zuma-redistribusi-dashboard` | ✅ Sales-style |
+| **Stok per Area** | iframe → `zuma-stockbyarea-dashboard` | ✅ Sales-style |
+| **SKU Search** | iframe → `zuma-skusearch-dashboard` | ✅ Sales-style |
+| **Summary Report** | iframe → `zuma-summaryreport-dashboard` | ✅ Sales-style |
 
-Karena view ini paling kompleks di seluruh master (~2.000 baris JS + 3 tab dengan table + chart + pagination + filter + modals), repo ini pakai **full-copy** dari `dashboard_inventory.html` master + patch kecil:
-- CSS inject: sidebar di-hide, container full width
-- JS inject: auto-navigate ke `switchView('inventory')` saat load
-- `<title>` ganti ke "Zuma Inventory Core"
+Hub chrome (top strip + navy header + tab-nav) **selalu** konsisten sales-style — yang beda cuma isi iframe-nya. Saat iframe load, hub inject CSS untuk hide duplicate header/sidebar di dalam iframe.
 
-## Features (full dari master)
-- Retail tab: table per SKU per toko, filter area/store/tier/gender/series, pagination 50, 3 charts (gender/area/series)
-- Warehouse tab: sama pattern, per WH
-- Consignment tab: per partner, filter tambahan partner/store
-- Minus on Hand modal
-- Detail SKU modal
-- Sort per kolom
-- Entity toggle DDD/MBB/UBB/LJBB
+## Deep linking
+URL hash nge-trigger tab:
+- `#inventory` → tab Inventory
+- `#stockcontrol` → tab Stock Control
+- `#maxstock` · `#redistribusi` · `#stockbyarea` · `#skusearch` · `#summaryreport`
 
-## Trade-off
-- File size ~1.2MB (cached setelah 1x load)
-- Load time sama dengan master
+## Inventory tab lokal
+`./inventory.html` = full-copy `dashboard_inventory.html` dari master + patch:
+- CSS override (hide sidebar, full-width)
+- JS auto-switchView('inventory')
 
-## Sync dari master
-Sama seperti zuma-stockcontrol-dashboard — lihat CLAUDE.md.
+## Catatan
+- Semua 6 sub-dashboard tetap hidup sebagai standalone URL (bisa di-share langsung)
+- Tab hub cuma embed mereka via iframe biar 1-URL experience
+- 2 tab (Inventory + Stock Control) masih master-style; sisanya udah sales-style
+- Kalau mau full-konsistensi sales-style, 2 itu perlu surgical-extract juga (lebih lama + risiko bug)
