@@ -967,18 +967,25 @@ html, body {
 
   <!-- TAB NAV -->
   <nav class="tab-nav" id="tabNav">
-    <button class="tab-btn active" data-tab="inventory">Inventory</button>
+    <button class="tab-btn active" data-tab="inventory">Stock</button>
     <button class="tab-btn" data-tab="stockcontrol">Stock Control</button>
     <button class="tab-btn" data-tab="maxstock">Max Stock</button>
-    <button class="tab-btn" data-tab="redistribusi">Redistribusi</button>
-    <button class="tab-btn" data-tab="stockbyarea">Stok per Area</button>
     <button class="tab-btn" data-tab="skusearch">SKU Search</button>
     <button class="tab-btn" data-tab="summaryreport">Summary Report</button>
   </nav>
 
 <section class="tab-content active" data-tab="inventory">
 
-  <!-- KPI -->
+
+  <!-- Sub-tab nav: Summary vs Per Area -->
+  <div class="tab-nav" style="margin-bottom:10px;">
+    <button class="tab-btn active" data-invview="summary" onclick="invSwitchView('summary')">Summary</button>
+    <button class="tab-btn" data-invview="perarea" onclick="invSwitchView('perarea')">Per Area</button>
+  </div>
+
+  <!-- View: Summary (current inventory list) -->
+  <div id="invViewSummary">
+<!-- KPI -->
   <div class="kpi-grid" id="invKpi" style="grid-template-columns:repeat(4,1fr);"></div>
 
   <!-- Table -->
@@ -1016,6 +1023,66 @@ html, body {
       <div id="invPageInfo">—</div>
       <div id="invPageButtons"></div>
     </div>
+  </div>
+  </div>
+
+  <!-- View: Per Area (pivot stok per area per zona logistik) -->
+  <div id="invViewPerarea" style="display:none;">
+<!-- HEADER -->
+  <!-- AREA TABS -->
+  <div class="tab-nav" id="sbaAreaTabs"></div>
+
+  <!-- FILTER BAR -->
+  <div class="filter-bar">
+    <div class="filter-group flex">
+      <label class="filter-label" for="sbaSearchInput">Cari</label>
+      <input type="text" id="sbaSearchInput" class="filter-input" placeholder="Kode / kode kecil / nama barang" oninput="renderStockByArea()">
+    </div>
+    <div class="filter-group">
+      <label class="filter-label" for="sbaTierFilter">Tier</label>
+      <select id="sbaTierFilter" class="filter-select" onchange="renderStockByArea()"><option value="">Semua Tier</option></select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label" for="sbaVersionFilter">Version</label>
+      <select id="sbaVersionFilter" class="filter-select" onchange="renderStockByArea()"><option value="">Semua Version</option></select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Opsi</label>
+      <label class="toggle-chip"><input type="checkbox" id="sbaHideEmpty" onchange="renderStockByArea()">Sembunyikan total=0</label>
+    </div>
+  </div>
+
+  <!-- Hidden checkboxes (drive sba rendering — kolom selalu tampil semua) -->
+  <input type="checkbox" id="sbaShowWH" checked style="display:none;">
+  <input type="checkbox" id="sbaShowToko" checked style="display:none;">
+  <input type="checkbox" id="sbaShowConsig" checked style="display:none;">
+
+  <div style="display:flex;justify-content:flex-end;margin-bottom:8px;font-size:10px;color:var(--fg-soft);">
+    <span><span style="display:inline-block;width:8px;height:8px;background:#ef4444;border-radius:50%;vertical-align:middle;margin-right:3px;"></span>≤0 <span style="display:inline-block;width:8px;height:8px;background:#f59e0b;border-radius:50%;vertical-align:middle;margin:0 3px 0 8px;"></span>1–5 <span style="display:inline-block;width:8px;height:8px;background:#00E273;border-radius:50%;vertical-align:middle;margin:0 3px 0 8px;"></span>≥6</span>
+  </div>
+
+  <!-- KPI -->
+  <div class="kpi-grid" id="sbaSummary"></div>
+
+  <!-- TABLE CARD -->
+  <div class="card">
+    <div class="card-header">
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+        <div class="card-title">Stok per SKU</div>
+        <div class="card-meta" id="sbaCountInfo">—</div>
+      </div>
+      <button class="btn btn-primary" onclick="exportStockByAreaCSV()">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>
+        Export CSV
+      </button>
+    </div>
+    <div class="table-wrap">
+      <table id="sbaTable" style="border-collapse:separate;border-spacing:0;font-size:11.5px;width:max-content;min-width:100%;">
+        <thead id="sbaThead" style="position:sticky;top:0;z-index:5;"></thead>
+        <tbody id="sbaTbody"></tbody>
+      </table>
+    </div>
+  </div>
   </div>
 
 </section>
@@ -1098,160 +1165,8 @@ html, body {
     </div>
   </div>
 </section>
-<section class="tab-content" data-tab="redistribusi">
-<div class="kpi-grid">
-    <div class="kpi-card surplus"><div class="kpi-label">Surplus SKU</div><div class="kpi-value surplus tabular" id="rdSurplusCount">—</div><div class="kpi-sub">On hand &gt; target</div></div>
-    <div class="kpi-card deficit"><div class="kpi-label">Restock SKU</div><div class="kpi-value deficit tabular" id="rdDeficitCount">—</div><div class="kpi-sub">On hand &lt; target</div></div>
-    <div class="kpi-card ok"><div class="kpi-label">Aman SKU</div><div class="kpi-value ok tabular" id="rdOkCount">—</div><div class="kpi-sub">On hand = target</div></div>
-  </div>
 
-  <div class="tab-nav">
-    <button class="tab-btn active" id="rdTabDetail" onclick="switchRdTab('detail')">Detail</button>
-    <button class="tab-btn" id="rdTabTransfer" onclick="switchRdTab('transfer')">Transfer Recs</button>
-  </div>
 
-  <div class="filter-bar">
-    <div class="filter-group" style="min-width:180px;flex:1;">
-      <label class="filter-label">Store</label>
-      <select id="rdFilterStore" class="filter-select" onchange="renderRdTable()"><option value="">Semua Store</option></select>
-    </div>
-    <div class="filter-group" style="min-width:130px;">
-      <label class="filter-label">Status</label>
-      <select id="rdFilterStatus" class="filter-select" onchange="renderRdTable()">
-        <option value="">Semua Status</option><option value="surplus">Surplus</option><option value="deficit">Restock</option><option value="ok">Aman</option>
-      </select>
-    </div>
-    <div class="filter-group" style="min-width:120px;">
-      <label class="filter-label">Series</label>
-      <select id="rdFilterSeries" class="filter-select" onchange="renderRdTable()"><option value="">Semua Series</option></select>
-    </div>
-    <div class="filter-group" style="min-width:100px;">
-      <label class="filter-label">Gender</label>
-      <select id="rdFilterGender" class="filter-select" onchange="renderRdTable()"><option value="">Semua Gender</option></select>
-    </div>
-    <div class="filter-group" style="min-width:80px;">
-      <label class="filter-label">Tier</label>
-      <select id="rdFilterTier" class="filter-select" onchange="renderRdTable()">
-        <option value="">Semua Tier</option><option>1</option><option>2</option><option>3</option><option>4</option>
-      </select>
-    </div>
-    <div class="filter-group">
-      <label class="filter-label">&nbsp;</label>
-      <button class="btn btn-primary" id="btnExport" onclick="exportCurrent()">📥 Export XLSX</button>
-    </div>
-    <div class="filter-group" style="margin-left:auto;">
-      <label class="filter-label">Rows</label>
-      <div id="rdRowCount" style="font-size:11px;color:var(--fg-soft);padding:6px 0;">—</div>
-    </div>
-  </div>
-
-  <!-- DETAIL TAB -->
-  <div id="rdDetailSection">
-    <div class="chip-row" style="margin-bottom:10px;">
-      <button class="chip active" id="rdStatusBtnAll" onclick="rdSetStatus('')">Semua</button>
-      <button class="chip surplus" id="rdStatusBtnSurplus" onclick="rdSetStatus('surplus')">Surplus</button>
-      <button class="chip deficit" id="rdStatusBtnRestock" onclick="rdSetStatus('deficit')">Restock</button>
-      <button class="chip ok" id="rdStatusBtnOk" onclick="rdSetStatus('ok')">Aman</button>
-    </div>
-    <div class="layout-split">
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">Stock Detail per SKU × Store</div>
-        </div>
-        <div class="table-wrap">
-          <table class="data">
-            <thead>
-              <tr>
-                <th>Store</th><th>Kode Mix</th><th>Nama Barang</th><th class="center">Size</th><th>Gender</th><th>Series</th><th class="center">Tipe</th><th class="center">Tier</th><th class="right">Ideal</th><th class="right">On Hand</th><th class="right">Gap</th><th class="center">Status</th>
-              </tr>
-            </thead>
-            <tbody id="rdDetailBody"></tbody>
-          </table>
-        </div>
-      </div>
-      <div class="side-panel" id="rdDetailSummaryPanel">
-        <div class="side-panel-title">Grade Toko</div>
-        <div id="rdGradeList" style="font-size:11px;color:var(--fg-soft);">—</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- TRANSFER TAB -->
-  <div id="rdTransferSection" class="panel-hidden">
-    <div class="chip-row" style="margin-bottom:10px;">
-      <button class="chip active" id="rdTypeBtnAll" onclick="rdSetType('')">Semua</button>
-      <button class="chip protol" id="rdTypeBtnProtol" onclick="rdSetType('WH Protol → Store')">RO Protol</button>
-      <button class="chip box" id="rdTypeBtnBox" onclick="rdSetType('RO Box')">RO Box</button>
-      <button class="chip mutasi" id="rdTypeBtnMutasi" onclick="rdSetType('Store Surplus → WH')">Mutasi ke WH</button>
-    </div>
-    <div class="card">
-      <div class="card-header"><div class="card-title">Transfer Recommendation</div></div>
-      <div class="table-wrap">
-        <table class="data">
-          <thead id="rdTransferHead"></thead>
-          <tbody id="rdTransferBody"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-</section>
-<section class="tab-content" data-tab="stockbyarea">
-<!-- HEADER -->
-  <!-- AREA TABS -->
-  <div class="tab-nav" id="sbaAreaTabs"></div>
-
-  <!-- FILTER BAR -->
-  <div class="filter-bar">
-    <div class="filter-group flex">
-      <label class="filter-label" for="sbaSearchInput">Cari</label>
-      <input type="text" id="sbaSearchInput" class="filter-input" placeholder="Kode / kode kecil / nama barang" oninput="renderStockByArea()">
-    </div>
-    <div class="filter-group">
-      <label class="filter-label" for="sbaTierFilter">Tier</label>
-      <select id="sbaTierFilter" class="filter-select" onchange="renderStockByArea()"><option value="">Semua Tier</option></select>
-    </div>
-    <div class="filter-group">
-      <label class="filter-label" for="sbaVersionFilter">Version</label>
-      <select id="sbaVersionFilter" class="filter-select" onchange="renderStockByArea()"><option value="">Semua Version</option></select>
-    </div>
-    <div class="filter-group">
-      <label class="filter-label">Opsi</label>
-      <label class="toggle-chip"><input type="checkbox" id="sbaHideEmpty" onchange="renderStockByArea()">Sembunyikan total=0</label>
-    </div>
-  </div>
-
-  <!-- Hidden checkboxes (drive sba rendering — kolom selalu tampil semua) -->
-  <input type="checkbox" id="sbaShowWH" checked style="display:none;">
-  <input type="checkbox" id="sbaShowToko" checked style="display:none;">
-  <input type="checkbox" id="sbaShowConsig" checked style="display:none;">
-
-  <div style="display:flex;justify-content:flex-end;margin-bottom:8px;font-size:10px;color:var(--fg-soft);">
-    <span><span style="display:inline-block;width:8px;height:8px;background:#ef4444;border-radius:50%;vertical-align:middle;margin-right:3px;"></span>≤0 <span style="display:inline-block;width:8px;height:8px;background:#f59e0b;border-radius:50%;vertical-align:middle;margin:0 3px 0 8px;"></span>1–5 <span style="display:inline-block;width:8px;height:8px;background:#00E273;border-radius:50%;vertical-align:middle;margin:0 3px 0 8px;"></span>≥6</span>
-  </div>
-
-  <!-- KPI -->
-  <div class="kpi-grid" id="sbaSummary"></div>
-
-  <!-- TABLE CARD -->
-  <div class="card">
-    <div class="card-header">
-      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
-        <div class="card-title">Stok per SKU</div>
-        <div class="card-meta" id="sbaCountInfo">—</div>
-      </div>
-      <button class="btn btn-primary" onclick="exportStockByAreaCSV()">
-        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>
-        Export CSV
-      </button>
-    </div>
-    <div class="table-wrap">
-      <table id="sbaTable" style="border-collapse:separate;border-spacing:0;font-size:11.5px;width:max-content;min-width:100%;">
-        <thead id="sbaThead" style="position:sticky;top:0;z-index:5;"></thead>
-        <tbody id="sbaTbody"></tbody>
-      </table>
-    </div>
-  </div>
-</section>
 <section class="tab-content" data-tab="skusearch">
 <div class="filter-bar">
     <div class="search-wrap">
@@ -1415,8 +1330,8 @@ function switchHubTab(tab) {
         try {
             if (tab === 'stockbyarea' && typeof initStockByArea === 'function') initStockByArea();
             else if (tab === 'maxstock' && typeof updateMaxStockAnalysis === 'function') updateMaxStockAnalysis();
-            else if (tab === 'redistribusi' && typeof renderRdTable === 'function' && typeof rdData !== 'undefined' && rdData) renderRdTable();
-            else if (tab === 'inventory' && typeof invRender === 'function') { invPopulateFilters(); invRender(); }
+            
+            else if (tab === 'inventory') { if (typeof invPopulateFilters === 'function') invPopulateFilters(); if (typeof invRender === 'function') invRender(); if (typeof initStockByArea === 'function') initStockByArea(); }
             else if (tab === 'stockcontrol' && typeof scRender === 'function') { scPopulateFilters(); scRender(); }
             else if (tab === 'skusearch') { /* no init needed — waits for user input */ }
             else if (tab === 'summaryreport') { /* no init needed — just export buttons */ }
@@ -1470,20 +1385,6 @@ async function loadAllData() {
         _dataLoaded = true;
         // Populate global filter dropdowns now that data is available
         try { if (typeof gfPopulateDependentFilters === 'function') gfPopulateDependentFilters(); } catch(e) { console.warn('gf populate:', e); }
-        // Redistribusi data — separate endpoint, load on-demand when tab first opened
-        // but we can trigger it in bg here
-        fetchAPI('/api/redistribution?t=' + Date.now()).then(d => {
-            rdData = d;
-            _rdDataLoaded = true;
-            var el;
-            if (el = document.getElementById('rdSnapshotLabel')) el.textContent = (rdData.snapshot_date || '—');
-            if (el = document.getElementById('rdSurplusCount')) el.textContent = fmt((rdData.summary || {}).surplus_count);
-            if (el = document.getElementById('rdDeficitCount')) el.textContent = fmt((rdData.summary || {}).deficit_count);
-            if (el = document.getElementById('rdOkCount')) el.textContent = fmt((rdData.summary || {}).ok_count);
-            if (typeof populateRdFilters === 'function') populateRdFilters();
-            if (typeof renderGradeList === 'function') renderGradeList();
-            if (activeTab === 'redistribusi' && typeof renderRdTable === 'function') renderRdTable();
-        }).catch(e => console.warn('rd load:', e));
 
         // Init the currently-active tab
         switchHubTab(activeTab);
@@ -4195,7 +4096,7 @@ function gfDispatchToActiveTab() {
             case 'stockcontrol':   if (typeof scRender === 'function') scRender(); break;
             case 'stockbyarea':    if (typeof renderStockByArea === 'function') renderStockByArea(); break;
             case 'maxstock':       if (typeof updateMaxStockAnalysis === 'function') updateMaxStockAnalysis(); break;
-            case 'redistribusi':   if (typeof renderRdTable === 'function' && typeof rdData !== 'undefined' && rdData) renderRdTable(); break;
+            
             case 'skusearch':      if (gf.search && typeof runSearch === 'function') { var inp = document.getElementById('skuInput'); if (inp) inp.value = gf.search; runSearch(); } break;
             default: break;
         }
@@ -4213,6 +4114,22 @@ function selectEntity(entity) {
     try { if (typeof selectEntity_stockbyarea === 'function') selectEntity_stockbyarea(entity); } catch(e) {}
     try { if (typeof selectEntity_maxstock === 'function') selectEntity_maxstock(entity); } catch(e) {}
     gfDispatchToActiveTab();
+}
+
+
+// Sub-tab switcher within Stock tab — Summary vs Per Area
+function invSwitchView(view) {
+    document.querySelectorAll('.tab-btn[data-invview]').forEach(function(b){ b.classList.toggle('active', b.dataset.invview === view); });
+    var sum = document.getElementById('invViewSummary');
+    var pa  = document.getElementById('invViewPerarea');
+    if (sum) sum.style.display = view === 'summary' ? 'block' : 'none';
+    if (pa)  pa.style.display  = view === 'perarea' ? 'block' : 'none';
+    // Trigger re-render
+    if (view === 'summary' && typeof invRender === 'function') invRender();
+    if (view === 'perarea' && typeof renderStockByArea === 'function') {
+        if (typeof initStockByArea === 'function') initStockByArea();
+        else renderStockByArea();
+    }
 }
 
 </script>
