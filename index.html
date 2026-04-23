@@ -1548,11 +1548,27 @@ function resetMSFilters() { ['msFilterArea','msFilterStore','msFilterFillRate'].
 function resetWHFilters() { ['msWHFilterArea','msWHFilterFillRate'].forEach(function(id){ var e=document.getElementById(id); if(e)e.value=''; }); updateMaxStockAnalysis(); }
 
 function updateMaxStockAnalysis() {
-    // Sync from global filter — channel retail → retail, channel warehouse/consignment → warehouse
-    if (typeof gf !== 'undefined') currentMSType = (gf.channel === 'retail') ? 'retail' : 'warehouse';
+    // Sync from global filter — retail → retail, warehouse → warehouse, consignment → empty
+    if (typeof gf !== 'undefined') currentMSType = (gf.channel === 'retail') ? 'retail' : (gf.channel === 'warehouse' ? 'warehouse' : 'consignment');
+
+    // Consignment has no max stock concept — show empty state and bail
+    if (currentMSType === 'consignment') {
+        ['msTotalMax','msTotalActual','msRemaining'].forEach(function(id){ var e=document.getElementById(id); if(e) e.textContent = '0'; });
+        var frEl = document.getElementById('msFillRate'); if (frEl) frEl.textContent = '—';
+        var sal = document.getElementById('storeAnalysisList');
+        if (sal) sal.innerHTML = '<div style="padding:50px 20px;text-align:center;color:var(--fg-soft);font-size:12.5px;">Max Stock hanya tersedia untuk Retail &amp; Warehouse.<br>Channel <strong>Consignment</strong> tidak punya kapasitas max stock — pilih channel lain di filter atas.</div>';
+        var tb = document.getElementById('tierBreakdown');
+        if (tb) tb.innerHTML = '<div style="padding:50px 20px;text-align:center;color:var(--fg-soft);font-size:12.5px;">—</div>';
+        if (fillRateChart) { fillRateChart.destroy(); fillRateChart = null; }
+        if (tierDistChart) { tierDistChart.destroy(); tierDistChart = null; }
+        filteredTierArticles = {};
+        return;
+    }
+
     var isWH = (currentMSType === 'warehouse');
     var locationData = {}, tierCounts = {};
     var totalActual = 0, totalMax = 0;
+    filteredTierArticles = {}; // Reset articles per tier
 
     // Sync hidden stubs from global filter so downstream reads get the right area/store
     if (typeof gf !== 'undefined') {
@@ -1606,6 +1622,19 @@ function updateMaxStockAnalysis() {
                     areaTiers[area][tier] += stock;
                     if (!areaEnt[area][entity]) areaEnt[area][entity] = 0;
                     areaEnt[area][entity] += stock;
+                    // Collect article for tier drill-down
+                    if (stock !== 0) {
+                        if (!filteredTierArticles[tier]) filteredTierArticles[tier] = [];
+                        filteredTierArticles[tier].push({
+                            sku: item.kode_kecil || item.sku || '',
+                            kode: item.kode || '',
+                            nama: item.name || '',
+                            size: item.size || '-',
+                            stock: stock,
+                            store: whName,
+                            entity: entity
+                        });
+                    }
                 });
             });
         });
@@ -1659,6 +1688,19 @@ function updateMaxStockAnalysis() {
                 storeStock[store] += stock;
                 if (!storeTiers[store][tier]) storeTiers[store][tier] = 0;
                 storeTiers[store][tier] += stock;
+                // Collect article for tier drill-down (retail)
+                if (stock !== 0) {
+                    if (!filteredTierArticles[tier]) filteredTierArticles[tier] = [];
+                    filteredTierArticles[tier].push({
+                        sku: item.kode_kecil || item.sku || '',
+                        kode: item.kode || '',
+                        nama: item.name || '',
+                        size: item.size || '-',
+                        stock: stock,
+                        store: store,
+                        entity: currentEntity
+                    });
+                }
             });
         });
 
@@ -1776,9 +1818,14 @@ function renderTierBreakdown(tierCounts) {
     var colors = ['#002A3A','#00E273','#D4A24C','#3b82f6','#ec4899','#7c3aed','#14b8a6','#f59e0b'];
     el.innerHTML = filtered.map(function(e, i) {
         var pct = total > 0 ? (Math.abs(e[1]) / total * 100) : 0;
-        return '<div class="tier-item">' +
-            '<div class="tier-box" style="background:' + colors[i % colors.length] + '">T' + esc(e[0]) + '</div>' +
-            '<div style="flex:1;"><div class="tier-num">' + fmt(e[1]) + ' <span style="color:var(--fg-soft);font-weight:500;font-size:10.5px;">pairs</span></div>' +
+        var tierKey = e[0];
+        var hasDrill = filteredTierArticles && filteredTierArticles[tierKey] && filteredTierArticles[tierKey].length > 0;
+        var cursorStyle = hasDrill ? 'cursor:pointer;' : '';
+        var titleAttr = hasDrill ? 'title="Klik untuk lihat daftar artikel"' : '';
+        var onclick = hasDrill ? 'onclick="showTierDetail(\'' + tierKey + '\')"' : '';
+        return '<div class="tier-item" style="' + cursorStyle + '" ' + onclick + ' ' + titleAttr + '>' +
+            '<div class="tier-box" style="background:' + colors[i % colors.length] + '">T' + esc(tierKey) + '</div>' +
+            '<div style="flex:1;"><div class="tier-num">' + fmt(e[1]) + ' <span style="color:var(--fg-soft);font-weight:500;font-size:10.5px;">pairs</span>' + (hasDrill ? ' <span style="color:var(--accent-dark);font-size:10px;font-weight:500;">· ' + fmt(filteredTierArticles[tierKey].length) + ' artikel ⤴</span>' : '') + '</div>' +
             '<div class="tier-pct">' + pct.toFixed(1) + '% dari total</div></div>' +
             '<div style="width:80px;height:5px;background:var(--border);border-radius:3px;overflow:hidden;"><div style="width:' + pct + '%;height:100%;background:' + colors[i % colors.length] + ';"></div></div>' +
             '</div>';
@@ -4116,6 +4163,93 @@ function selectEntity(entity) {
     gfDispatchToActiveTab();
 }
 
+
+// Max Stock — tier drill-down state
+var filteredTierArticles = {};
+
+function showTierDetail(tier) {
+    var articles = filteredTierArticles && filteredTierArticles[tier] ? filteredTierArticles[tier] : [];
+    if (!articles.length) return;
+    // Aggregate per SKU (kode_kecil + size)
+    var bySku = {};
+    articles.forEach(function(a) {
+        var key = a.sku + '|' + a.size + '|' + a.store;
+        if (!bySku[key]) bySku[key] = Object.assign({ total: 0 }, a);
+        bySku[key].total += a.stock;
+    });
+    var rows = Object.values(bySku).sort(function(a,b){ return Math.abs(b.total) - Math.abs(a.total); });
+
+    var modal = document.getElementById('tierDetailModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'tierDetailModal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,42,58,0.55);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px;';
+        modal.innerHTML = '<div style="background:var(--card);max-width:960px;width:100%;max-height:80vh;border-radius:var(--radius);box-shadow:0 10px 40px rgba(0,0,0,0.2);display:flex;flex-direction:column;overflow:hidden;">' +
+            '<div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--navy);color:#fff;">' +
+            '<div id="tierModalTitle" style="font-size:11px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;">Tier Detail</div>' +
+            '<button onclick="closeTierDetail()" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;padding:4px 10px;">✕</button>' +
+            '</div>' +
+            '<div id="tierModalBody" style="flex:1;overflow:auto;padding:0;"></div>' +
+            '<div style="padding:8px 14px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">' +
+            '<div id="tierModalMeta" style="font-size:11px;color:var(--fg-soft);">—</div>' +
+            '<button class="btn btn-primary" onclick="exportTierDetailCSV()">📥 Export CSV</button>' +
+            '</div></div>';
+        document.body.appendChild(modal);
+        modal.addEventListener('click', function(e) { if (e.target === modal) closeTierDetail(); });
+    }
+    modal.style.display = 'flex';
+    modal._tier = tier;
+    modal._rows = rows;
+
+    var title = document.getElementById('tierModalTitle');
+    if (title) title.textContent = 'Tier ' + tier + ' · ' + (currentMSType === 'warehouse' ? 'Warehouse' : 'Retail');
+
+    var totalQty = rows.reduce(function(s,r){ return s + r.total; }, 0);
+    var meta = document.getElementById('tierModalMeta');
+    if (meta) meta.textContent = fmt(rows.length) + ' SKU-lokasi · ' + fmt(totalQty) + ' pairs';
+
+    var body = document.getElementById('tierModalBody');
+    if (body) {
+        var html = '<table class="data" style="width:100%;">' +
+            '<thead><tr><th>Kode Kecil</th><th>Kode Barang</th><th>Nama Barang</th><th class="center">Size</th>' +
+            (currentMSType === 'warehouse' ? '<th class="center">Entity</th>' : '') +
+            '<th>Lokasi</th><th class="center">Stock</th></tr></thead><tbody>';
+        rows.forEach(function(r) {
+            var stkCls = r.total < 0 ? 'color:#ef4444;font-weight:700;' : (r.total === 0 ? 'color:var(--fg-soft);' : '');
+            html += '<tr>' +
+                '<td style="font-family:ui-monospace,monospace;font-size:11px;">' + esc(String(r.kode || '—').toUpperCase()) + '</td>' +
+                '<td style="font-family:ui-monospace,monospace;font-size:11px;color:var(--fg-muted);">' + esc(String(r.sku || '—').toUpperCase()) + '</td>' +
+                '<td>' + esc(r.nama) + '</td>' +
+                '<td class="center">' + esc(r.size) + '</td>' +
+                (currentMSType === 'warehouse' ? '<td class="center">' + esc(r.entity || '—') + '</td>' : '') +
+                '<td>' + esc(r.store) + '</td>' +
+                '<td class="center" style="' + stkCls + '">' + fmt(r.total) + '</td>' +
+                '</tr>';
+        });
+        html += '</tbody></table>';
+        body.innerHTML = html;
+    }
+}
+
+function closeTierDetail() {
+    var modal = document.getElementById('tierDetailModal');
+    if (modal) modal.style.display = 'none';
+}
+
+function exportTierDetailCSV() {
+    var modal = document.getElementById('tierDetailModal');
+    if (!modal || !modal._rows) return;
+    var rows = modal._rows, tier = modal._tier;
+    var headers = ['Kode Kecil','Kode Barang','Nama Barang','Size','Entity','Lokasi','Stock'];
+    function escv(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
+    var out = [headers.map(escv).join(',')];
+    rows.forEach(function(r){ out.push([String(r.kode || '').toUpperCase(), String(r.sku || '').toUpperCase(), r.nama, r.size, r.entity || '', r.store, r.total].map(escv).join(',')); });
+    var blob = new Blob(['﻿' + out.join('\n')], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'maxstock_tier' + tier + '_' + (currentMSType || 'all') + '_' + new Date().toISOString().slice(0,10) + '.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
 
 // Sub-tab switcher within Stock tab — Summary vs Per Area
 function invSwitchView(view) {
