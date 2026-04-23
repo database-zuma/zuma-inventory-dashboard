@@ -3706,7 +3706,7 @@ function invRender() {
             series: it.series || '',
             tipe: it.tipe || '',
             partner: it.partner || '',
-            version: it.version || '',
+            version: (typeof _normalizeVersion === 'function') ? _normalizeVersion(it.version) : (it.version || ''),
             total: qty,
             loc: loc
         };
@@ -4099,6 +4099,16 @@ function _gfGetSourceItems() {
     return entData[gf.channel] || [];
 }
 
+// Normalize version: strip trailing .0 / .00, drop 0 / '000' / empty / NaN
+function _normalizeVersion(v) {
+    if (v == null || v === '') return '';
+    var s = String(v).trim();
+    if (!s) return '';
+    var n = Number(s);
+    if (!isFinite(n) || n <= 0) return '';
+    return String(Math.floor(n)); // integer form, drops '.00' etc.
+}
+
 function gfPopulateDependentFilters() {
     var items = _gfGetSourceItems();
     var tiers = {}, genders = {}, series = {}, versions = {}, areas = {}, stores = {};
@@ -4106,7 +4116,8 @@ function gfPopulateDependentFilters() {
         if (it.tier != null && it.tier !== '') tiers[String(it.tier)] = true;
         if (it.gender) genders[it.gender] = true;
         if (it.series) series[it.series] = true;
-        if (it.version != null && it.version !== '') versions[String(it.version)] = true;
+        var vn = _normalizeVersion(it.version);
+        if (vn) versions[vn] = true;
         if (it.store_stock) {
             Object.keys(it.store_stock).forEach(function(s){
                 stores[s] = true;
