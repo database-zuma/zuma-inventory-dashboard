@@ -3965,11 +3965,12 @@ function invRender() {
     // KPI
     var totalSku = filtered.length;
     var totalStock = filtered.reduce(function(s,r){ return s + r.total; }, 0);
-    // Minus on Hand stats: lokasi count, unique artikel, sum pairs minus
+    // Minus on Hand stats: distinct lokasi (stores), distinct artikel (kode_kecil), total pairs minus
     var _minusRows = (typeof buildMinusOnHandRows === 'function') ? buildMinusOnHandRows() : [];
-    var negCount = _minusRows.length;
-    var _minusSet = {}; _minusRows.forEach(function(r){ _minusSet[r.kode_kecil] = true; });
-    var negArtikel = Object.keys(_minusSet).length;
+    var _storeSet = {}, _artikelSet = {};
+    _minusRows.forEach(function(r){ if (r.store) _storeSet[r.store] = true; if (r.kode_kecil) _artikelSet[r.kode_kecil] = true; });
+    var negCount = Object.keys(_storeSet).length;
+    var negArtikel = Object.keys(_artikelSet).length;
     var negPairs = _minusRows.reduce(function(s,r){ return s + r.stock; }, 0);
     // Count distinct stores/warehouses that have stock in current view
     var storeSet = {};
