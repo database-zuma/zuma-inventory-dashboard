@@ -4928,7 +4928,7 @@ function gfPopulateStoreDropdown() {
 function gfDispatchToActiveTab() {
     try {
         switch (activeTab) {
-            case 'inventory':      if (typeof invRender === 'function') invRender(); break;
+            case 'inventory':      if (typeof invRender === 'function') invRender(); if (typeof renderStockByArea === 'function') renderStockByArea(); break;
             case 'stockcontrol':   if (typeof scRender === 'function') scRender(); break;
             case 'stockbyarea':    if (typeof renderStockByArea === 'function') renderStockByArea(); break;
             case 'maxstock':       if (typeof updateMaxStockAnalysis === 'function') updateMaxStockAnalysis(); break;
