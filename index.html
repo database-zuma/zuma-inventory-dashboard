@@ -3628,20 +3628,25 @@ async function exportStockOnHand(type, entity) {
     }
     var stockLeftCols = [0,1,2,3,4,5,6,7,8,9,10];
     var stockColWidths = [{wch:22},{wch:12},{wch:14},{wch:12},{wch:14},{wch:16},{wch:30},{wch:8},{wch:8},{wch:10},{wch:8},{wch:14},{wch:6},{wch:6},{wch:10}];
-    var wsSemua = XLSX.utils.aoa_to_sheet(toAoa(allRows));
-    wsSemua['!cols'] = stockColWidths.slice();
-    applyTableStyle(wsSemua, stockLeftCols); addTierSummary(wsSemua, allRows, 10, 16);
-    applyHighlightCols(wsSemua, allRows.length);
-    XLSX.utils.book_append_sheet(wb, wsSemua, 'SEMUA');
-    if (minusRows.length > 0) {
-        var wsMinus = XLSX.utils.aoa_to_sheet(toAoa(minusRows));
-        wsMinus['!cols'] = stockColWidths.slice();
-        applyTableStyle(wsMinus, stockLeftCols); addTierSummaryNoPercent(wsMinus, minusRows, 10);
-        applyHighlightCols(wsMinus, minusRows.length);
-        XLSX.utils.book_append_sheet(wb, wsMinus, 'MINUS ON HAND');
-    }
+    // Group by store first to decide whether SEMUA + MINUS summary sheets are needed
     var storeMap = {};
     allRows.forEach(function(r) { var k = r.store || 'Other'; if (!storeMap[k]) storeMap[k] = []; storeMap[k].push(r); });
+    var storeCount = Object.keys(storeMap).length;
+    // Only include SEMUA + MINUS ON HAND summary sheets when more than 1 store/WH
+    if (storeCount > 1) {
+        var wsSemua = XLSX.utils.aoa_to_sheet(toAoa(allRows));
+        wsSemua['!cols'] = stockColWidths.slice();
+        applyTableStyle(wsSemua, stockLeftCols); addTierSummary(wsSemua, allRows, 10, 16);
+        applyHighlightCols(wsSemua, allRows.length);
+        XLSX.utils.book_append_sheet(wb, wsSemua, 'SEMUA');
+        if (minusRows.length > 0) {
+            var wsMinus = XLSX.utils.aoa_to_sheet(toAoa(minusRows));
+            wsMinus['!cols'] = stockColWidths.slice();
+            applyTableStyle(wsMinus, stockLeftCols); addTierSummaryNoPercent(wsMinus, minusRows, 10);
+            applyHighlightCols(wsMinus, minusRows.length);
+            XLSX.utils.book_append_sheet(wb, wsMinus, 'MINUS ON HAND');
+        }
+    }
     Object.keys(storeMap).sort().forEach(function(s) {
         var wsStore = XLSX.utils.aoa_to_sheet(toAoa(storeMap[s]));
         wsStore['!cols'] = stockColWidths.slice();
@@ -3706,12 +3711,16 @@ async function exportConsig(entity) {
         ws['!cols'] = [{wch:22},{wch:14},{wch:10},{wch:14},{wch:12},{wch:14},{wch:16},{wch:30},{wch:8},{wch:8},{wch:10},{wch:8},{wch:14},{wch:6},{wch:6},{wch:8}];
         applyTableStyle(ws, [0,1,2,3,4,5,6,7,8,9,10,11]);
     }
-    var wsSemua = XLSX.utils.aoa_to_sheet([headers].concat(allRows));
-    applyConsigStyle(wsSemua); addTierSummary(wsSemua, allRows, 13, 17);
-    applyConsigHighlight(wsSemua, allRows.length);
-    XLSX.utils.book_append_sheet(wb, wsSemua, 'SEMUA');
+    // Group by store first; only add SEMUA summary sheet when more than 1 store
     var storeMap = {};
     allRows.forEach(function(r) { var s = r[0]||'Other'; if (!storeMap[s]) storeMap[s] = []; storeMap[s].push(r); });
+    var storeCount = Object.keys(storeMap).length;
+    if (storeCount > 1) {
+        var wsSemua = XLSX.utils.aoa_to_sheet([headers].concat(allRows));
+        applyConsigStyle(wsSemua); addTierSummary(wsSemua, allRows, 13, 17);
+        applyConsigHighlight(wsSemua, allRows.length);
+        XLSX.utils.book_append_sheet(wb, wsSemua, 'SEMUA');
+    }
     Object.keys(storeMap).sort().forEach(function(s) {
         var wsS = XLSX.utils.aoa_to_sheet([headers].concat(storeMap[s]));
         applyConsigStyle(wsS); addTierSummary(wsS, storeMap[s], 13, 17);
