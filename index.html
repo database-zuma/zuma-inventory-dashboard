@@ -4540,10 +4540,59 @@ async function scExportExcel() {
     });
 
     var ws = XLSX.utils.json_to_sheet(rows);
+    applyControlStockStyle(ws);
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Control Stock');
     var dateStr = new Date().toISOString().slice(0, 10);
     XLSX.writeFile(wb, 'Control_Stock_global_' + dateStr + '.xlsx');
+}
+
+// Shared style for Stock Control Excel sheets — Zuma navy header + per-status GAP color
+function applyControlStockStyle(ws) {
+    if (!ws['!ref']) return;
+    var range = XLSX.utils.decode_range(ws['!ref']);
+    var border = {top:{style:'thin',color:{rgb:'999999'}},bottom:{style:'thin',color:{rgb:'999999'}},left:{style:'thin',color:{rgb:'999999'}},right:{style:'thin',color:{rgb:'999999'}}};
+    var headerStyle = {alignment:{horizontal:'center',vertical:'center',wrapText:true},font:{bold:true,color:{rgb:'FFFFFF'},sz:10},fill:{fgColor:{rgb:'002A3A'}},border:border};
+    var cellCenter = {alignment:{horizontal:'center',vertical:'center'},font:{sz:10},border:border};
+    var cellLeft   = {alignment:{horizontal:'left',vertical:'center'},font:{sz:10},border:border};
+    var statusFill = {
+        'Understock': 'FECACA', 'Tipis': 'FEF3C7', 'Aman': 'D1FAE5', 'Dead Stock': 'DBEAFE'
+    };
+    // Find text-left columns (ARTICLE, KODE BARANG, etc.) and GAP STATUS col
+    var leftCols = {}, gapStatusCol = null, gapCol = null;
+    for (var c = range.s.c; c <= range.e.c; c++) {
+        var hdr = ws[XLSX.utils.encode_cell({r:0,c:c})];
+        var v = hdr ? String(hdr.v || '') : '';
+        if (v === 'ARTICLE' || v === 'KODE BARANG' || v === 'KODE KECIL') leftCols[c] = true;
+        if (v === 'GAP STATUS') gapStatusCol = c;
+        if (v === 'GAP') gapCol = c;
+    }
+    for (var r = range.s.r; r <= range.e.r; r++) {
+        for (var c = range.s.c; c <= range.e.c; c++) {
+            var addr = XLSX.utils.encode_cell({r:r,c:c});
+            if (!ws[addr]) continue;
+            if (r === 0) { ws[addr].s = headerStyle; continue; }
+            // GAP STATUS per-row colored cell
+            if (c === gapStatusCol) {
+                var bg = statusFill[String(ws[addr].v || '')] || null;
+                if (bg) { ws[addr].s = {alignment:{horizontal:'center',vertical:'center'},font:{bold:true,sz:10},fill:{fgColor:{rgb:bg}},border:border}; continue; }
+            }
+            // GAP numeric: red if negative, green if positive
+            if (c === gapCol && ws[addr].t === 'n') {
+                var gv = Number(ws[addr].v) || 0;
+                var col = gv < 0 ? 'DC2626' : (gv > 0 ? '16A34A' : '6B7280');
+                ws[addr].s = {alignment:{horizontal:'center',vertical:'center'},font:{color:{rgb:col},sz:10},border:border,numFmt:'#,##0'};
+                continue;
+            }
+            ws[addr].s = leftCols[c] ? cellLeft : cellCenter;
+        }
+    }
+    // Sensible column widths
+    if (!ws['!cols']) {
+        var cols = [];
+        for (var ci = range.s.c; ci <= range.e.c; ci++) cols.push({wch: 12});
+        ws['!cols'] = cols;
+    }
 }
 
 
@@ -4882,6 +4931,7 @@ async function scoExportExcel() {
     });
 
     var ws = XLSX.utils.json_to_sheet(rows);
+    applyControlStockStyle(ws);
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Control Stock Online');
     var dateStr = new Date().toISOString().slice(0, 10);
