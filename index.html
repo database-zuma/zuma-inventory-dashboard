@@ -2560,6 +2560,8 @@ function buildStockByAreaRows(area) {
                 size: it.size || '',
                 tier: it.tier !== undefined && it.tier !== null ? String(it.tier) : '',
                 version: (it.version !== undefined && it.version !== null) ? String(it.version) : '',
+                gender: it.gender || '',
+                series: it.series || '',
                 whQty: 0, whStores: {}, tokoQty: 0, tokoStores: {}, consigQty: 0, consigStores: {}
             };
         }
@@ -2701,6 +2703,8 @@ function renderStockByArea() {
     var q = (_gf.search || '').toLowerCase().trim();
     var tierF = _gf.tier || '';
     var verF = _gf.version || '';
+    var genderF = _gf.gender || '';
+    var seriesF = _gf.series || '';
     var hideEmpty = hEl ? hEl.checked : false;
 
     function rowVisibleTotal(r) {
@@ -2711,6 +2715,8 @@ function renderStockByArea() {
         if (hideEmpty && rowVisibleTotal(r) === 0) return false;
         if (tierF && String(r.tier) !== tierF) return false;
         if (verF && String(r.version) !== verF) return false;
+        if (genderF && String(r.gender) !== genderF) return false;
+        if (seriesF && String(r.series) !== seriesF) return false;
         if (q) {
             var hay = (r.kode + '|' + r.kode_kecil + '|' + r.name).toLowerCase();
             if (hay.indexOf(q) === -1) return false;
@@ -2856,12 +2862,16 @@ function exportStockByAreaCSV() {
     var q = (_gf.search || '').toLowerCase().trim();
     var tierF = _gf.tier || '';
     var verF = _gf.version || '';
+    var genderF = _gf.gender || '';
+    var seriesF = _gf.series || '';
     var hideEmpty = hEl ? hEl.checked : false;
     function rowVisTot(r) { return (showWH ? r.whQty : 0) + (showToko ? r.tokoQty : 0) + (showConsig ? r.consigQty : 0); }
     var filtered = rows.filter(function(r) {
         if (hideEmpty && rowVisTot(r) === 0) return false;
         if (tierF && String(r.tier) !== tierF) return false;
         if (verF && String(r.version) !== verF) return false;
+        if (genderF && String(r.gender) !== genderF) return false;
+        if (seriesF && String(r.series) !== seriesF) return false;
         if (q) {
             var hay = (r.kode + '|' + r.kode_kecil + '|' + r.name).toLowerCase();
             if (hay.indexOf(q) === -1) return false;
