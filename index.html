@@ -3562,6 +3562,9 @@ async function exportStockOnHand(type, entity) {
         var map = {}; sizes.forEach(function(sz, i) { map[sz] = i; }); sizeIndexMap[kode] = map;
     });
 
+    // Global filter: narrow to specific store OR area if user picked one
+    var _gfArea  = (typeof gf !== 'undefined' && gf && gf.area) ? gf.area : '';
+    var _gfStore = (typeof gf !== 'undefined' && gf && gf.store) ? gf.store : '';
     var allRows = [], minusRows = [];
     rawData.forEach(function(item) {
         if (!item.store_stock) return;
@@ -3573,6 +3576,13 @@ async function exportStockOnHand(type, entity) {
             if (type === 'warehouse' && !isWarehouseLocation(store)) return;
             var sl = store.toLowerCase();
             if (type === 'warehouse' && (sl.indexOf('online bali') >= 0 || sl.indexOf('online jakarta') >= 0 || sl.indexOf('online jkt') >= 0)) return;
+            // Global Store filter takes priority (single store). Otherwise fall back to Area filter.
+            if (_gfStore) {
+                if (store !== _gfStore) return;
+            } else if (_gfArea) {
+                var sa = (typeof getAreaFromStore === 'function') ? getAreaFromStore(store) : '';
+                if (sa !== _gfArea) return;
+            }
             var kodeUp = (item.kode || '').toUpperCase();
             var assortStr = assortmentMap[kodeUp] || '-';
             var sizeIdx = (sizeIndexMap[kodeUp] && sizeIndexMap[kodeUp][item.size || '']) || 0;
@@ -3659,6 +3669,9 @@ async function exportConsig(entity) {
         var sizes = Object.keys(csizeMap[k]).sort(function(a,b) { return (parseInt(a)||0) - (parseInt(b)||0); });
         var m = {}; sizes.forEach(function(s,i) { m[s] = i; }); csizeMap[k] = m;
     });
+    // Global filter: narrow to specific store OR area if user picked one
+    var _gfArea  = (typeof gf !== 'undefined' && gf && gf.area) ? gf.area : '';
+    var _gfStore = (typeof gf !== 'undefined' && gf && gf.store) ? gf.store : '';
     var allRows = [];
     items.forEach(function(i) {
         var kodeUp = (i.kode||'').toUpperCase();
@@ -3667,11 +3680,18 @@ async function exportConsig(entity) {
         var ca = '-';
         if (assortStr !== '-') { var p = assortStr.split('-'); ca = (sIdx < p.length) ? (parseInt(p[sIdx])||'-') : '-'; }
         if (!i.store_stock) {
+            if (_gfStore || _gfArea) return; // skip placeholder rows when user filtered specifically
             allRows.push(['-', i.partner||'', getAreaFromStore('-'), (i.kode_kecil||'').toUpperCase(), kodeUp, (i.kode_mix||'').toUpperCase(), (i.sku||'').toUpperCase(), i.name||'', i.size||'', i.gender||'', i.series||'', i.tipe||'', ca, i.tier||'', i.version||'', i.total||0]);
         } else {
             Object.entries(i.store_stock).forEach(function(entry) {
                 var store = entry[0], stock = entry[1];
                 if (stock === 0) return;
+                if (_gfStore) {
+                    if (store !== _gfStore) return;
+                } else if (_gfArea) {
+                    var sa = (typeof getAreaFromStore === 'function') ? getAreaFromStore(store) : '';
+                    if (sa !== _gfArea) return;
+                }
                 allRows.push([store, i.partner||'', getAreaFromStore(store), (i.kode_kecil||'').toUpperCase(), kodeUp, (i.kode_mix||'').toUpperCase(), (i.sku||'').toUpperCase(), i.name||'', i.size||'', i.gender||'', i.series||'', i.tipe||'', ca, i.tier||'', i.version||'', stock]);
             });
         }
