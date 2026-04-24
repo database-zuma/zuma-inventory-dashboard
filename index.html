@@ -995,6 +995,40 @@ html, body {
 
 <section class="tab-content active" data-tab="inventory">
 
+  <!-- STOCK ON-HAND EXPORTS (moved here from Summary Report) -->
+  <section class="section" style="margin-bottom:12px;">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Stock On-Hand — Export Excel</div>
+        <div class="section-sub" style="margin-top:3px;">Lengkap per tipe stok &amp; entity — 1 sheet SEMUA, 1 sheet MINUS ON HAND, plus sheet per toko/WH</div>
+      </div>
+    </div>
+    <div class="section-body">
+      <div class="section-group">
+        <div class="section-group-label">Retail</div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="exportStockOnHand('retail','DDD')"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>Retail DDD</button>
+        </div>
+      </div>
+      <div class="section-group">
+        <div class="section-group-label">Warehouse</div>
+        <div class="btn-row">
+          <button class="btn" onclick="exportStockOnHand('warehouse','DDD')"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>WH DDD</button>
+          <button class="btn" onclick="exportStockOnHand('warehouse','MBB')"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>WH MBB</button>
+          <button class="btn" onclick="exportStockOnHand('warehouse','LJBB')"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>WH LJBB</button>
+          <button class="btn" onclick="exportStockOnHand('warehouse','UBB')"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>WH UBB</button>
+          <button class="btn" onclick="exportWHOnline()"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>WH Online Bali &amp; Jakarta</button>
+        </div>
+      </div>
+      <div class="section-group">
+        <div class="section-group-label">Consignment</div>
+        <div class="btn-row">
+          <button class="btn btn-gold" onclick="exportConsig('DDD')"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>Consig DDD</button>
+          <button class="btn btn-gold" onclick="exportConsig('MBB')"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>Consig MBB</button>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <!-- Sub-tab nav: Summary vs Per Area -->
   <div class="tab-nav" style="margin-bottom:10px;">
@@ -1296,44 +1330,7 @@ html, body {
 </section>
 <section class="tab-content" data-tab="summaryreport">
 <!-- STOCK ON-HAND -->
-  <section class="section">
-    <div class="section-header">
-      <div>
-        <div class="section-title">Stock On-Hand</div>
-        <div class="section-sub" style="margin-top:3px;">Export Excel lengkap per tipe stok &amp; entity — 1 sheet SEMUA, 1 sheet MINUS ON HAND, plus sheet per toko/WH</div>
-      </div>
-    </div>
-    <div class="section-body">
-      <div class="section-group">
-        <div class="section-group-label">Retail</div>
-        <div class="btn-row">
-          <button class="btn btn-primary" onclick="exportStockOnHand('retail','DDD')"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>Retail DDD</button>
-        </div>
-      </div>
-      <div class="section-group">
-        <div class="section-group-label">Warehouse</div>
-        <div class="btn-row">
-          <button class="btn" onclick="exportStockOnHand('warehouse','DDD')"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>WH DDD</button>
-          <button class="btn" onclick="exportStockOnHand('warehouse','MBB')"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>WH MBB</button>
-          <button class="btn" onclick="exportStockOnHand('warehouse','LJBB')"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>WH LJBB</button>
-          <button class="btn" onclick="exportStockOnHand('warehouse','UBB')"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>WH UBB</button>
-        </div>
-      </div>
-      <div class="section-group">
-        <div class="section-group-label">Consignment</div>
-        <div class="btn-row">
-          <button class="btn btn-gold" onclick="exportConsig('DDD')"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>Consig DDD</button>
-          <button class="btn btn-gold" onclick="exportConsig('MBB')"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>Consig MBB</button>
-        </div>
-      </div>
-      <div class="section-group">
-        <div class="section-group-label">WH Online</div>
-        <div class="btn-row">
-          <button class="btn" onclick="exportWHOnline()"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>WH Online Bali &amp; Jakarta</button>
-        </div>
-      </div>
-    </div>
-  </section>
+  <!-- Stock On-Hand exports moved to Stock tab header -->
 
   <!-- LINK OUT TO OTHER DASHBOARDS -->
   <section class="section">
