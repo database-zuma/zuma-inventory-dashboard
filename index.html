@@ -3982,10 +3982,13 @@ function scRender() {
     var hideZero = (document.getElementById('scHideZero') || {}).checked;
 
     // ============ MASTER-STYLE AGGREGATION ============
-    // Aggregate ACROSS entities by kode_kecil: WH Pusat/Bali/Jkt + Retail + Consig
+    // Aggregate ACROSS entities by kode_kecil: WH Pusat/Bali/Jkt + WH Online (Bali/Jkt) + Retail + Consig
+    // WH Online counted in Stok Global (matches master), but not displayed as separate column.
     function classifyWhArea(whName) {
         var wl = String(whName || '').toLowerCase();
-        if (wl.indexOf('online bali') !== -1 || wl.indexOf('online jakarta') !== -1 || wl.indexOf('online jkt') !== -1) return 'online';
+        // ONLINE matches must come BEFORE the bali/jakarta catch-alls
+        if (wl.indexOf('online') !== -1 && wl.indexOf('bali') !== -1) return 'WHOB';
+        if (wl.indexOf('online') !== -1 && (wl.indexOf('jakarta') !== -1 || wl.indexOf('jkt') !== -1)) return 'WHOJ';
         if (wl.indexOf('bali') !== -1 || wl.indexOf('gatsu') !== -1) return 'WHB';
         if (wl.indexOf('jakarta') !== -1 || wl.indexOf('pluit') !== -1) return 'WHJ';
         if (wl.indexOf('pusat') !== -1 || wl.indexOf('surabaya') !== -1) return 'WHS';
@@ -4011,6 +4014,7 @@ function scRender() {
                 tipe: it.tipe || '',
                 version: (typeof _normalizeVersion === 'function') ? _normalizeVersion(it.version) : (it.version || ''),
                 WHS: 0, WHB: 0, WHJ: 0,
+                WHOB: 0, WHOJ: 0,
                 stokRetail: 0, stokConsig: 0
             };
         }
@@ -4025,7 +4029,7 @@ function scRender() {
             if (!it.store_stock) return;
             Object.keys(it.store_stock).forEach(function(wh) {
                 var c = classifyWhArea(wh);
-                if (!c || c === 'online') return;
+                if (!c) return;
                 var qty = Number(it.store_stock[wh]) || 0;
                 row[c] += qty;
             });
@@ -4051,10 +4055,11 @@ function scRender() {
         Object.values(it.store_stock).forEach(function(v){ row.stokConsig += Number(v) || 0; });
     });
 
-    // Compute derived fields per row
+    // Compute derived fields per row — WH Online included in Stok Global (master parity)
     Object.values(byKK).forEach(function(r) {
         r.whTotal = r.WHS + r.WHB + r.WHJ;
-        r.globalStock = r.whTotal + r.stokRetail + r.stokConsig;
+        r.whOnlineTotal = r.WHOB + r.WHOJ;
+        r.globalStock = r.whTotal + r.whOnlineTotal + r.stokRetail + r.stokConsig;
         r.total = r.globalStock; // for compat
     });
 
@@ -4129,17 +4134,19 @@ function scRender() {
     scFiltered = rows;
 
     // Summary cards (6): WH Pusat (Jatim), WH Bali, WH Jakarta, Retail, Consig, Global
+    // WH Online (Bali/Jkt) NOT shown as a separate card but counted in Global (master parity)
     var ent = typeof currentEntity !== 'undefined' ? currentEntity : 'DDD';
     var aggWH = { 'Jawa Timur':0, 'Bali':0, 'Jakarta':0 };
-    var aggRetail = 0, aggConsig = 0;
+    var aggOnline = 0, aggRetail = 0, aggConsig = 0;
     var entData = (allData || {})[ent] || {};
     (entData.warehouse || []).forEach(function(it) {
         if (!it.store_stock) return;
         Object.keys(it.store_stock).forEach(function(wh) {
-            var wl = wl = wh.toLowerCase();
-            if (wl.indexOf('online bali') !== -1 || wl.indexOf('online jakarta') !== -1 || wl.indexOf('online jkt') !== -1) return;
+            var wl = wh.toLowerCase();
             var qty = Number(it.store_stock[wh]) || 0;
-            if (wl.indexOf('bali') !== -1 || wl.indexOf('gatsu') !== -1) aggWH['Bali'] += qty;
+            // ONLINE matches must come BEFORE the bali/jakarta catch-alls
+            if (wl.indexOf('online') !== -1 && (wl.indexOf('bali') !== -1 || wl.indexOf('jakarta') !== -1 || wl.indexOf('jkt') !== -1)) aggOnline += qty;
+            else if (wl.indexOf('bali') !== -1 || wl.indexOf('gatsu') !== -1) aggWH['Bali'] += qty;
             else if (wl.indexOf('jakarta') !== -1 || wl.indexOf('pluit') !== -1) aggWH['Jakarta'] += qty;
             else if (wl.indexOf('pusat') !== -1 || wl.indexOf('surabaya') !== -1) aggWH['Jawa Timur'] += qty;
         });
@@ -4157,7 +4164,7 @@ function scRender() {
         if (!it.store_stock) return;
         Object.values(it.store_stock).forEach(function(v){ aggConsig += Number(v) || 0; });
     });
-    var aggGlobal = aggWH['Jawa Timur'] + aggWH['Bali'] + aggWH['Jakarta'] + aggRetail + aggConsig;
+    var aggGlobal = aggWH['Jawa Timur'] + aggWH['Bali'] + aggWH['Jakarta'] + aggOnline + aggRetail + aggConsig;
 
     var summaryEl = document.getElementById('scStockSummary');
     if (summaryEl) {
@@ -4320,6 +4327,8 @@ async function scExportExcel() {
         row['WH BALI']  = r.WHB || 0;
         row['WH JKT']   = r.WHJ || 0;
         row['WH TOTAL'] = r.whTotal || 0;
+        row['WH ONLINE BALI'] = r.WHOB || 0;
+        row['WH ONLINE JKT']  = r.WHOJ || 0;
         row['STOK RETAIL'] = r.stokRetail || 0;
         row['STOK CONSIG'] = r.stokConsig || 0;
         row['STOK GLOBAL'] = r.globalStock || 0;
