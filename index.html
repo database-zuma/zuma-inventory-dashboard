@@ -4511,42 +4511,37 @@ async function scExportExcel() {
     var mLabels = monthCols.map(function(m){ return (monthNameMap[m] || m).toUpperCase(); });
     var statusLabels = { understock: 'Understock', tipis: 'Tipis', aman: 'Aman', dead: 'Dead Stock' };
 
+    // Column order matches master (web lama): per-row object = one Excel row.
+    // SKU mode adds SIZE after KODE BARANG; kodeKecil mode omits SIZE.
     var rows = scFiltered.map(function(r) {
         var row = {};
         if (scViewMode === 'sku') {
             row['KODE BARANG'] = r.kode_kecil || '';
-            row['SIZE'] = r.size || '';
+            row['SIZE']        = r.size || '';
         } else {
-            row['KODE KECIL'] = r.kode || '';
+            row['KODE BARANG'] = r.kode || '';
         }
-        row['NAMA BARANG'] = r.name || '';
-        row['SERIES'] = r.series || '';
-        row['GENDER'] = r.gender || '';
-        row['TIER'] = r.tier || '';
+        row['ARTICLE'] = r.name || '';
+        row['GENDER']  = r.gender || '';
+        row['TIER']    = r.tier || '';
         (r.monthlySales || []).forEach(function(v, i) { row[mLabels[i] || ('M' + (i+1))] = v; });
-        row['AVG/BLN'] = Math.round((r.avgMonthly || 0) * 100) / 100;
-        row['WH PUSAT'] = r.WHS || 0;
-        row['WH BALI']  = r.WHB || 0;
-        row['WH JKT']   = r.WHJ || 0;
-        row['WH TOTAL'] = r.whTotal || 0;
-        row['WH ONLINE BALI'] = r.WHOB || 0;
-        row['WH ONLINE JKT']  = r.WHOJ || 0;
+        row['AVG/BLN']     = Math.round((r.avgMonthly || 0) * 100) / 100;
+        row['WH TOTAL']    = r.whTotal || 0;
         row['STOK RETAIL'] = r.stokRetail || 0;
         row['STOK CONSIG'] = r.stokConsig || 0;
-        row['STOK GLOBAL'] = r.globalStock || 0;
-        row['GAP'] = Math.round(r.gap || 0);
+        row['GLOBAL']      = r.globalStock || 0;
         row['TW']  = r.tw >= 999 ? 0 : (Math.round((r.tw || 0) * 100) / 100);
         row['TO']  = r.to >= 999 ? 0 : (Math.round((r.to || 0) * 100) / 100);
-        row['STATUS'] = statusLabels[r.status] || '';
+        row['GAP'] = Math.round(r.gap || 0);
+        row['GAP STATUS'] = statusLabels[r.status] || '';
         return row;
     });
 
     var ws = XLSX.utils.json_to_sheet(rows);
     var wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Stock Control');
+    XLSX.utils.book_append_sheet(wb, ws, 'Control Stock');
     var dateStr = new Date().toISOString().slice(0, 10);
-    var modeLabel = scViewMode === 'sku' ? 'sku' : 'kodekecil';
-    XLSX.writeFile(wb, 'StockControl_' + modeLabel + '_' + scCurrentType + '_' + dateStr + '.xlsx');
+    XLSX.writeFile(wb, 'Control_Stock_global_' + dateStr + '.xlsx');
 }
 
 
@@ -4860,35 +4855,35 @@ async function scoExportExcel() {
     var mLabels = monthCols.map(function(m){ return (monthNameMap[m] || m).toUpperCase(); });
     var statusLabels = { understock: 'Understock', tipis: 'Tipis', aman: 'Aman', dead: 'Dead Stock' };
 
+    // Column order matches master (web lama): KODE BARANG / SIZE / ARTICLE / SERIES / GENDER / TIER / months / AVG/BLN / WH O.BALI / WH O.JKT / ONLINE TOTAL / TW / GAP / GAP STATUS
     var rows = scoFiltered.map(function(r) {
         var row = {};
         if (scoViewMode === 'sku') {
             row['KODE BARANG'] = r.kode_kecil || '';
-            row['SIZE'] = r.size || '';
+            row['SIZE']        = r.size || '';
         } else {
-            row['KODE KECIL'] = r.kode || '';
+            row['KODE BARANG'] = r.kode || '';
         }
-        row['NAMA BARANG'] = r.name || '';
-        row['SERIES'] = r.series || '';
-        row['GENDER'] = r.gender || '';
-        row['TIER'] = r.tier || '';
+        row['ARTICLE'] = r.name || '';
+        row['SERIES']  = r.series || '';
+        row['GENDER']  = r.gender || '';
+        row['TIER']    = r.tier || '';
         (r.monthlySales || []).forEach(function(v, i) { row[mLabels[i] || ('M' + (i+1))] = v; });
-        row['AVG/BLN'] = Math.round((r.avgMonthly || 0) * 100) / 100;
-        row['WH O.BALI'] = r.WHOB || 0;
-        row['WH O.JKT']  = r.WHOJ || 0;
+        row['AVG/BLN']      = Math.round((r.avgMonthly || 0) * 100) / 100;
+        row['WH O.BALI']    = r.WHOB || 0;
+        row['WH O.JKT']     = r.WHOJ || 0;
         row['ONLINE TOTAL'] = r.whOnlineTotal || 0;
-        row['GAP'] = Math.round(r.gap || 0);
         row['TW']  = r.tw >= 999 ? 0 : (Math.round((r.tw || 0) * 100) / 100);
-        row['STATUS'] = statusLabels[r.status] || '';
+        row['GAP'] = Math.round(r.gap || 0);
+        row['GAP STATUS'] = statusLabels[r.status] || '';
         return row;
     });
 
     var ws = XLSX.utils.json_to_sheet(rows);
     var wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Stock Control Online');
+    XLSX.utils.book_append_sheet(wb, ws, 'Control Stock Online');
     var dateStr = new Date().toISOString().slice(0, 10);
-    var modeLabel = scoViewMode === 'sku' ? 'sku' : 'kodekecil';
-    XLSX.writeFile(wb, 'StockControlOnline_' + modeLabel + '_' + dateStr + '.xlsx');
+    XLSX.writeFile(wb, 'Control_Stock_Online_Online Total_' + dateStr + '.xlsx');
 }
 
 
