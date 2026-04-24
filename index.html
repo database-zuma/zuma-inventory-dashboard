@@ -1047,24 +1047,12 @@ html, body {
   <!-- AREA TABS -->
   <div class="tab-nav" id="sbaAreaTabs"></div>
 
-  <!-- FILTER BAR -->
-  <div class="filter-bar">
-    <div class="filter-group flex">
-      <label class="filter-label" for="sbaSearchInput">Cari</label>
-      <input type="text" id="sbaSearchInput" class="filter-input" placeholder="Kode / kode kecil / nama barang" oninput="renderStockByArea()">
-    </div>
-    <div class="filter-group">
-      <label class="filter-label" for="sbaTierFilter">Tier</label>
-      <select id="sbaTierFilter" class="filter-select" onchange="renderStockByArea()"><option value="">Semua Tier</option></select>
-    </div>
-    <div class="filter-group">
-      <label class="filter-label" for="sbaVersionFilter">Version</label>
-      <select id="sbaVersionFilter" class="filter-select" onchange="renderStockByArea()"><option value="">Semua Version</option></select>
-    </div>
-    <div class="filter-group">
-      <label class="filter-label">Opsi</label>
-      <label class="toggle-chip"><input type="checkbox" id="sbaHideEmpty" onchange="renderStockByArea()">Sembunyikan total=0</label>
-    </div>
+  <!-- FILTER BAR hidden — uses global filter bar at top -->
+  <div class="filter-bar" style="display:none;">
+    <input type="text" id="sbaSearchInput" value="">
+    <select id="sbaTierFilter"><option value=""></option></select>
+    <select id="sbaVersionFilter"><option value=""></option></select>
+    <input type="checkbox" id="sbaHideEmpty">
   </div>
 
   <!-- Hidden checkboxes (drive sba rendering — kolom selalu tampil semua) -->
@@ -2670,16 +2658,15 @@ function renderStockByArea() {
     var area = sbaCurrentArea;
     var rows = buildStockByAreaRows(area);
     var cols = buildSbaColumns(area);
-    var qEl = document.getElementById('sbaSearchInput');
-    var tEl = document.getElementById('sbaTierFilter');
-    var vEl = document.getElementById('sbaVersionFilter');
+    // Stok per Area uses GLOBAL filter values (gf.*) — local sba inputs are hidden
     var hEl = document.getElementById('sbaHideEmpty');
     var showWH = (document.getElementById('sbaShowWH') || {}).checked !== false;
     var showToko = (document.getElementById('sbaShowToko') || {}).checked !== false;
     var showConsig = (document.getElementById('sbaShowConsig') || {}).checked !== false;
-    var q = qEl ? (qEl.value || '').toLowerCase().trim() : '';
-    var tierF = tEl ? tEl.value : '';
-    var verF = vEl ? vEl.value : '';
+    var _gf = (typeof gf !== 'undefined' && gf) ? gf : {};
+    var q = (_gf.search || '').toLowerCase().trim();
+    var tierF = _gf.tier || '';
+    var verF = _gf.version || '';
     var hideEmpty = hEl ? hEl.checked : false;
 
     function rowVisibleTotal(r) {
@@ -2818,16 +2805,15 @@ function renderStockByArea() {
 function exportStockByAreaCSV() {
     var area = sbaCurrentArea;
     var rows = buildStockByAreaRows(area);
-    var qEl = document.getElementById('sbaSearchInput');
-    var tEl = document.getElementById('sbaTierFilter');
-    var vEl = document.getElementById('sbaVersionFilter');
+    // Stok per Area uses GLOBAL filter values (gf.*) — local sba inputs are hidden
     var hEl = document.getElementById('sbaHideEmpty');
     var showWH = (document.getElementById('sbaShowWH') || {}).checked !== false;
     var showToko = (document.getElementById('sbaShowToko') || {}).checked !== false;
     var showConsig = (document.getElementById('sbaShowConsig') || {}).checked !== false;
-    var q = qEl ? (qEl.value || '').toLowerCase().trim() : '';
-    var tierF = tEl ? tEl.value : '';
-    var verF = vEl ? vEl.value : '';
+    var _gf = (typeof gf !== 'undefined' && gf) ? gf : {};
+    var q = (_gf.search || '').toLowerCase().trim();
+    var tierF = _gf.tier || '';
+    var verF = _gf.version || '';
     var hideEmpty = hEl ? hEl.checked : false;
     function rowVisTot(r) { return (showWH ? r.whQty : 0) + (showToko ? r.tokoQty : 0) + (showConsig ? r.consigQty : 0); }
     var filtered = rows.filter(function(r) {
