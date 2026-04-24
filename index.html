@@ -2736,7 +2736,8 @@ function renderStockByArea() {
     var STORE_COL_W = 64;
 
     function storeHeaderCell(label, title) {
-        return '<th style="padding:6px 3px;background:' + HEADER_BG + ';color:rgba(255,255,255,0.9);font-weight:700;font-size:9px;text-align:center;min-width:' + STORE_COL_W + 'px;max-width:' + STORE_COL_W + 'px;width:' + STORE_COL_W + 'px;border-right:1px solid rgba(255,255,255,0.06);height:120px;letter-spacing:0.05em;text-transform:uppercase;" title="' + _sbaEsc(title) + '"><div style="writing-mode:vertical-rl;transform:rotate(180deg);padding:4px 0;max-height:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + _sbaEsc(label) + '</div></th>';
+        // Auto-fit width: min 56px so cell doesn't squeeze; no fixed max so long names can grow if needed
+        return '<th style="padding:6px 6px;background:' + HEADER_BG + ';color:rgba(255,255,255,0.9);font-weight:700;font-size:9px;text-align:center;min-width:56px;border-right:1px solid rgba(255,255,255,0.06);height:120px;letter-spacing:0.05em;text-transform:uppercase;white-space:nowrap;" title="' + _sbaEsc(title) + '"><div style="writing-mode:vertical-rl;transform:rotate(180deg);padding:4px 0;">' + _sbaEsc(label) + '</div></th>';
     }
 
     var showTokoCols = showToko ? cols.toko : [];
@@ -2768,10 +2769,10 @@ function renderStockByArea() {
             row1 += '<th rowspan="2" style="' + metaStyle + 'text-align:center;position:sticky;top:0;left:' + WHB_LEFT + 'px;z-index:6;min-width:' + WH_COL_W + 'px;max-width:' + WH_COL_W + 'px;width:' + WH_COL_W + 'px;border-right:2px solid ' + HEADER_BG + ';background:linear-gradient(180deg,' + HEADER_BG + ' 0%,#003c53 100%);color:#00E273;">' + _sbaEsc(whLabel) + '</th>';
         }
         if (showTokoCols.length) {
-            row1 += '<th colspan="' + showTokoCols.length + '" style="background:' + HEADER_BG + ';color:rgba(255,255,255,0.85);padding:6px;text-align:center;font-size:9px;font-weight:700;position:sticky;top:0;z-index:4;letter-spacing:0.12em;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,0.08);">Retail ' + _sbaEsc(area) + ' (' + showTokoCols.length + ')</th>';
+            row1 += '<th colspan="' + showTokoCols.length + '" style="background:' + HEADER_BG + ';color:rgba(255,255,255,0.85);padding:6px;text-align:center;font-size:9px;font-weight:700;position:sticky;top:0;z-index:4;letter-spacing:0.12em;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,0.08);">Retail</th>';
         }
         if (showConsigCols.length) {
-            row1 += '<th colspan="' + showConsigCols.length + '" style="background:' + HEADER_BG + ';color:rgba(255,255,255,0.85);padding:6px;text-align:center;font-size:9px;font-weight:700;position:sticky;top:0;z-index:4;letter-spacing:0.12em;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,0.08);">Consignment ' + _sbaEsc(area) + ' (' + showConsigCols.length + ')</th>';
+            row1 += '<th colspan="' + showConsigCols.length + '" style="background:' + HEADER_BG + ';color:rgba(255,255,255,0.85);padding:6px;text-align:center;font-size:9px;font-weight:700;position:sticky;top:0;z-index:4;letter-spacing:0.12em;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,0.08);">Consignment</th>';
         }
         row1 += '<th rowspan="2" style="' + metaStyle + 'position:sticky;right:0;top:0;z-index:7;text-align:right;border-left:2px solid ' + HEADER_BG + ';">Total</th></tr>';
 
@@ -2798,7 +2799,8 @@ function renderStockByArea() {
 
     function cellQty(q) {
         var c = _sbaCellColor(q);
-        return '<td style="padding:5px 6px;text-align:center;font-weight:600;color:' + c.fg + ';font-size:11px;background:' + c.bg + ';min-width:' + STORE_COL_W + 'px;max-width:' + STORE_COL_W + 'px;width:' + STORE_COL_W + 'px;border-right:1px solid #f1f5f9;border-bottom:1px solid #f1f5f9;font-variant-numeric:tabular-nums;">' + q.toLocaleString('id-ID') + '</td>';
+        // Auto-fit width: matches header (min 56px, no fixed max)
+        return '<td style="padding:5px 6px;text-align:center;font-weight:600;color:' + c.fg + ';font-size:11px;background:' + c.bg + ';min-width:56px;border-right:1px solid #f1f5f9;border-bottom:1px solid #f1f5f9;font-variant-numeric:tabular-nums;">' + q.toLocaleString('id-ID') + '</td>';
     }
     function cellWhAgg(q) {
         var c = _sbaCellColor(q);
