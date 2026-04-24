@@ -995,41 +995,6 @@ html, body {
 
 <section class="tab-content active" data-tab="inventory">
 
-  <!-- STOCK ON-HAND EXPORTS (moved here from Summary Report) -->
-  <section class="section" style="margin-bottom:12px;">
-    <div class="section-header">
-      <div>
-        <div class="section-title">Stock On-Hand — Export Excel</div>
-        <div class="section-sub" style="margin-top:3px;">Lengkap per tipe stok &amp; entity — 1 sheet SEMUA, 1 sheet MINUS ON HAND, plus sheet per toko/WH</div>
-      </div>
-    </div>
-    <div class="section-body">
-      <div class="section-group">
-        <div class="section-group-label">Retail</div>
-        <div class="btn-row">
-          <button class="btn btn-primary" onclick="exportStockOnHand('retail','DDD')"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>Retail DDD</button>
-        </div>
-      </div>
-      <div class="section-group">
-        <div class="section-group-label">Warehouse</div>
-        <div class="btn-row">
-          <button class="btn" onclick="exportStockOnHand('warehouse','DDD')"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>WH DDD</button>
-          <button class="btn" onclick="exportStockOnHand('warehouse','MBB')"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>WH MBB</button>
-          <button class="btn" onclick="exportStockOnHand('warehouse','LJBB')"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>WH LJBB</button>
-          <button class="btn" onclick="exportStockOnHand('warehouse','UBB')"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>WH UBB</button>
-          <button class="btn" onclick="exportWHOnline()"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>WH Online Bali &amp; Jakarta</button>
-        </div>
-      </div>
-      <div class="section-group">
-        <div class="section-group-label">Consignment</div>
-        <div class="btn-row">
-          <button class="btn btn-gold" onclick="exportConsig('DDD')"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>Consig DDD</button>
-          <button class="btn btn-gold" onclick="exportConsig('MBB')"><svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>Consig MBB</button>
-        </div>
-      </div>
-    </div>
-  </section>
-
   <!-- Sub-tab nav: Summary vs Per Area -->
   <div class="tab-nav" style="margin-bottom:10px;">
     <button class="tab-btn active" data-invview="summary" onclick="invSwitchView('summary')">Summary</button>
@@ -1048,9 +1013,9 @@ html, body {
         <div class="card-title" id="invTableTitle">Data Stock Retail</div>
         <div class="card-meta" id="invCountInfo">—</div>
       </div>
-      <button class="btn btn-primary" onclick="invExportCSV()">
+      <button class="btn btn-primary" onclick="invExportContextual()" id="invExportBtn" title="Export Excel sesuai Entity + Channel aktif">
         <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>
-        Export CSV
+        <span id="invExportLabel">Export Excel</span>
       </button>
     </div>
     <div class="table-wrap" style="max-height:68vh;overflow:auto;">
@@ -1111,9 +1076,9 @@ html, body {
         <div class="card-title">Stok per SKU</div>
         <div class="card-meta" id="sbaCountInfo">—</div>
       </div>
-      <button class="btn btn-primary" onclick="exportStockByAreaCSV()">
+      <button class="btn btn-primary" onclick="invExportContextual()" title="Export Excel sesuai Entity + Channel aktif">
         <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>
-        Export CSV
+        Export Excel
       </button>
     </div>
     <div class="table-wrap" style="max-height:85vh;overflow:auto;">
@@ -3906,6 +3871,7 @@ function invReset() {
 function invRender() {
     // Sync from global filters
     invCurrentType = gf.channel;
+    try { invRefreshExportLabel(); } catch(e) {}
     var items = invGetSourceItems();
     var q = (gf.search || '').toLowerCase().trim();
     // Area filter intentionally NOT applied to Stock Summary — only drives Per Area sub-tab
@@ -4040,6 +4006,28 @@ function invRender() {
 }
 function invPrev() { if (invCurrentPage > 1) { invCurrentPage--; invRender(); } }
 function invNext() { invCurrentPage++; invRender(); }
+
+// Route the Stock tab export button to the right per-entity/channel Excel export
+function invExportContextual() {
+    var ent = (typeof currentEntity !== 'undefined' && currentEntity) ? currentEntity : 'DDD';
+    var ch  = String((typeof gf !== 'undefined' && gf && gf.channel) || 'retail').toLowerCase();
+    if (ch === 'consignment') return exportConsig(ent);
+    if (ch === 'warehouse')   return exportStockOnHand('warehouse', ent);
+    return exportStockOnHand('retail', ent); // default / channel=retail
+}
+
+// Update the Export button label (e.g. "Retail DDD", "WH MBB", "Consig UBB") to show
+// which file will download — reads gf.channel + currentEntity.
+function invRefreshExportLabel() {
+    var el = document.getElementById('invExportLabel'); if (!el) return;
+    var ent = (typeof currentEntity !== 'undefined' && currentEntity) ? currentEntity : 'DDD';
+    var ch  = String((typeof gf !== 'undefined' && gf && gf.channel) || 'retail').toLowerCase();
+    var label = 'Export Excel';
+    if (ch === 'consignment') label = 'Consig ' + ent;
+    else if (ch === 'warehouse') label = 'WH ' + ent;
+    else label = 'Retail ' + ent;
+    el.textContent = label;
+}
 
 function invExportCSV() {
     if (!invFiltered || !invFiltered.length) { alert('Tidak ada data untuk export'); return; }
