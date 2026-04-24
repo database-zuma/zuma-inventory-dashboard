@@ -4218,6 +4218,7 @@ function scRender() {
         h += '<th class="center">WH Bali</th>';
         h += '<th class="center">WH Jkt</th>';
         h += '<th class="center" style="' + navyBg + '">WH TOTAL</th>';
+        h += '<th class="center" title="WH Online Bali + WH Online Jkt">WH ONLINE</th>';
         h += '<th class="center" style="' + navyBg + '">STOK RETAIL</th>';
         h += '<th class="center" style="' + navyBg + '">STOK CONSIG</th>';
         h += '<th class="center" style="' + navyBg + '">STOK GLOBAL</th>';
@@ -4230,7 +4231,8 @@ function scRender() {
     }
 
     var baseCols = scViewMode === 'sku' ? 6 : 5; // extra Size column in SKU mode
-    var totalCols = baseCols + monthCols.length + 1 + 3 + 4 + 4;
+    // monthCols + AVG + 3 WH (Pusat/Bali/Jkt) + WH TOTAL + WH ONLINE + 3 stok (Retail/Consig/Global) + 4 (GAP/TW/TO/Status)
+    var totalCols = baseCols + monthCols.length + 1 + 3 + 1 + 1 + 3 + 4;
     var tbody = document.getElementById('scTbody');
     if (tbody) {
         if (!rows.length) {
@@ -4272,6 +4274,7 @@ function scRender() {
                     salesCells +
                     '<td class="center" style="font-weight:700;color:var(--gold);background:rgba(212,162,76,0.18);font-variant-numeric:tabular-nums;">' + (r.avgMonthly > 0 ? r.avgMonthly.toFixed(1) : '—') + '</td>' +
                     stkCell(r.WHS) + stkCell(r.WHB) + stkCell(r.WHJ) + stkCell(r.whTotal, true) +
+                    stkCell(r.whOnlineTotal) +
                     stkCell(r.stokRetail, true) + stkCell(r.stokConsig, true) + stkCell(r.globalStock, true) +
                     '<td class="center" style="' + gapCls + 'font-variant-numeric:tabular-nums;">' + (r.gap > 0 ? '+' : '') + fmt(Math.round(r.gap)) + '</td>' +
                     '<td class="center" style="' + twCls + 'font-variant-numeric:tabular-nums;">' + (r.tw >= 999 ? '∞' : r.tw.toFixed(1)) + '</td>' +
