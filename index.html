@@ -4057,7 +4057,9 @@ function buildMinusOnHandRows() {
     var version = _gf.version || '';
     var normVer = typeof _normalizeVersion === 'function' ? _normalizeVersion : function(v){return v || '';};
 
-    var rows = [];
+    // Aggregate per (kode_kecil × store) to avoid double-counting when same SKU appears
+    // multiple times across entity variants (e.g. DDD/MBB/UBB rows all with same kode_kecil).
+    var agg = {};
     items.forEach(function(it) {
         if (tier && String(it.tier) !== tier) return;
         if (gender && it.gender !== gender) return;
@@ -4068,24 +4070,31 @@ function buildMinusOnHandRows() {
             if (hay.indexOf(q) < 0) return;
         }
         var ss = it.store_stock || {};
+        var kk = (it.kode_kecil || '').toUpperCase();
+        if (!kk) return;
         Object.keys(ss).forEach(function(s) {
             if (store && s !== store) return;
             var v = Number(ss[s]) || 0;
-            if (v >= 0) return;
-            rows.push({
-                kode: (it.kode || '').toUpperCase(),
-                kode_kecil: (it.kode_kecil || '').toUpperCase(),
-                name: it.name || '',
-                size: it.size || '',
-                tier: it.tier || '',
-                gender: it.gender || '',
-                store: s,
-                area: (typeof getAreaFromStore === 'function') ? getAreaFromStore(s) : '',
-                stock: v
-            });
+            if (v === 0) return;
+            var key = kk + '||' + s;
+            if (!agg[key]) {
+                agg[key] = {
+                    kode: (it.kode || '').toUpperCase(),
+                    kode_kecil: kk,
+                    name: it.name || '',
+                    size: it.size || '',
+                    tier: it.tier || '',
+                    gender: it.gender || '',
+                    store: s,
+                    area: (typeof getAreaFromStore === 'function') ? getAreaFromStore(s) : '',
+                    stock: 0
+                };
+            }
+            agg[key].stock += v;
         });
     });
-    rows.sort(function(a,b){ return a.stock - b.stock; }); // most negative first
+    var rows = Object.values(agg).filter(function(r){ return r.stock < 0; });
+    rows.sort(function(a,b){ return a.stock - b.stock; });
     return rows;
 }
 
