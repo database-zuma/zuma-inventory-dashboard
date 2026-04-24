@@ -4079,18 +4079,21 @@ function scRender() {
         return null;
     }
 
+    // Aggregation key — SKU mode: per-size (kode_kecil "b1on02z34"), KodeKecil mode: article (kode "b1on02")
     var byKK = {};
     function ensureRow(it) {
-        var kk = (it.kode_kecil || '').toUpperCase();
-        var sku = (it.sku || kk).toUpperCase();
-        var key = scViewMode === 'sku' ? sku : kk;
+        var kkRaw = (it.kode_kecil || '').toLowerCase(); // for sales lookup (lowercase)
+        var kk    = (it.kode_kecil || '').toUpperCase();
+        var kode  = (it.kode || kk).toUpperCase();        // article-level (no size)
+        var sku   = (it.sku || kk).toUpperCase();
+        var key   = scViewMode === 'sku' ? kk : kode;
         if (!key) return null;
         if (!byKK[key]) {
             byKK[key] = {
                 sku: sku,
-                kode_kecil: kk,
+                kode_kecil: kk,           // per-size short code
+                kode: kode,               // article (no size)
                 size: scViewMode === 'sku' ? (it.size || '') : '',
-                kode: (it.kode || '').toUpperCase(),
                 name: it.name || '',
                 tier: it.tier != null ? String(it.tier) : '',
                 gender: it.gender || '',
@@ -4099,9 +4102,11 @@ function scRender() {
                 version: (typeof _normalizeVersion === 'function') ? _normalizeVersion(it.version) : (it.version || ''),
                 WHS: 0, WHB: 0, WHJ: 0,
                 WHOB: 0, WHOJ: 0,
-                stokRetail: 0, stokConsig: 0
+                stokRetail: 0, stokConsig: 0,
+                _kkSet: {}                // collects kode_kecil children for sales aggregation
             };
         }
+        if (kkRaw) byKK[key]._kkSet[kkRaw] = true;
         return byKK[key];
     }
 
@@ -4176,11 +4181,17 @@ function scRender() {
     // Compute avg sales + GAP classification per row (master formula: 90-day rolling window scaled to 30-day month)
     // avgMonthly = totalSales / _days * 30  (so 4 months data still divides by 90 days, not by month count)
     // gap = stock - (avgMonthly * 3)   (3-month forecast horizon)
+    // KodeKecil mode: sum sales across all kode_kecil children of this article (sales API is keyed per-size)
     var days = salesMap._days || 90;
     rows.forEach(function(r) {
+        var children = Object.keys(r._kkSet || {});
         var totalSales = 0;
-        r.monthlySales = [];
-        monthCols.forEach(function(mi){ var q = getSalesQty(r.kode_kecil, mi); r.monthlySales.push(q); totalSales += q; });
+        r.monthlySales = monthCols.map(function(mi) {
+            var sum = 0;
+            children.forEach(function(kk){ sum += getSalesQty(kk, mi); });
+            totalSales += sum;
+            return sum;
+        });
         r.totalSales = totalSales;
         r.avgMonthly = totalSales / days * 30;
         r.gap = r.globalStock - (r.avgMonthly * 3);
@@ -4349,10 +4360,12 @@ function scRender() {
                 }
                 var firstCols;
                 if (scViewMode === 'sku') {
+                    // SKU mode = Kode Barang (per-size short code) + Size column
                     firstCols = '<td style="font-family:ui-monospace,monospace;">' + esc(String(r.kode_kecil).toUpperCase()) + '</td>' +
                                 '<td class="center" style="font-family:ui-monospace,monospace;">' + esc(r.size || '—') + '</td>';
                 } else {
-                    firstCols = '<td style="font-family:ui-monospace,monospace;">' + esc(String(r.kode_kecil).toUpperCase()) + '</td>';
+                    // KodeKecil mode = article-level code (no size)
+                    firstCols = '<td style="font-family:ui-monospace,monospace;">' + esc(String(r.kode).toUpperCase()) + '</td>';
                 }
                 return '<tr>' +
                     firstCols +
@@ -4406,7 +4419,7 @@ async function scExportExcel() {
             row['KODE BARANG'] = r.kode_kecil || '';
             row['SIZE'] = r.size || '';
         } else {
-            row['KODE KECIL'] = r.kode_kecil || '';
+            row['KODE KECIL'] = r.kode || '';
         }
         row['NAMA BARANG'] = r.name || '';
         row['SERIES'] = r.series || '';
@@ -4489,26 +4502,31 @@ function scoRender() {
         return null;
     }
 
+    // SKU mode keys by per-size kode_kecil; KodeKecil mode keys by article-level kode (sizes summed)
     var byKey = {};
     function ensureRow(it) {
-        var kk = (it.kode_kecil || '').toUpperCase();
-        var sku = (it.sku || kk).toUpperCase();
-        var key = scoViewMode === 'sku' ? sku : kk;
+        var kkRaw = (it.kode_kecil || '').toLowerCase();
+        var kk    = (it.kode_kecil || '').toUpperCase();
+        var kode  = (it.kode || kk).toUpperCase();
+        var sku   = (it.sku || kk).toUpperCase();
+        var key   = scoViewMode === 'sku' ? kk : kode;
         if (!key) return null;
         if (!byKey[key]) {
             byKey[key] = {
                 sku: sku,
                 kode_kecil: kk,
+                kode: kode,
                 size: scoViewMode === 'sku' ? (it.size || '') : '',
-                kode: (it.kode || '').toUpperCase(),
                 name: it.name || '',
                 tier: it.tier != null ? String(it.tier) : '',
                 gender: it.gender || '',
                 series: it.series || '',
                 version: (typeof _normalizeVersion === 'function') ? _normalizeVersion(it.version) : (it.version || ''),
-                WHOB: 0, WHOJ: 0
+                WHOB: 0, WHOJ: 0,
+                _kkSet: {}
             };
         }
+        if (kkRaw) byKey[key]._kkSet[kkRaw] = true;
         return byKey[key];
     }
 
@@ -4562,9 +4580,15 @@ function scoRender() {
     }
 
     rows.forEach(function(r) {
+        // KodeKecil mode sums sales across all kode_kecil children of the article
+        var children = Object.keys(r._kkSet || {});
         var totalSales = 0;
-        r.monthlySales = [];
-        monthCols.forEach(function(mi){ var qq = getSalesQty(r.kode_kecil, mi); r.monthlySales.push(qq); totalSales += qq; });
+        r.monthlySales = monthCols.map(function(mi) {
+            var sum = 0;
+            children.forEach(function(kk){ sum += getSalesQty(kk, mi); });
+            totalSales += sum;
+            return sum;
+        });
         r.totalSales = totalSales;
         r.avgMonthly = totalSales / days * 30;
         r.gap = r.whOnlineTotal - (r.avgMonthly * 3);
@@ -4693,7 +4717,7 @@ function scoRender() {
                     firstCols = '<td style="font-family:ui-monospace,monospace;">' + esc(String(r.kode_kecil).toUpperCase()) + '</td>' +
                                 '<td class="center" style="font-family:ui-monospace,monospace;">' + esc(r.size || '—') + '</td>';
                 } else {
-                    firstCols = '<td style="font-family:ui-monospace,monospace;">' + esc(String(r.kode_kecil).toUpperCase()) + '</td>';
+                    firstCols = '<td style="font-family:ui-monospace,monospace;">' + esc(String(r.kode).toUpperCase()) + '</td>';
                 }
                 return '<tr>' +
                     firstCols +
@@ -4743,7 +4767,7 @@ async function scoExportExcel() {
             row['KODE BARANG'] = r.kode_kecil || '';
             row['SIZE'] = r.size || '';
         } else {
-            row['KODE KECIL'] = r.kode_kecil || '';
+            row['KODE KECIL'] = r.kode || '';
         }
         row['NAMA BARANG'] = r.name || '';
         row['SERIES'] = r.series || '';
