@@ -4327,7 +4327,7 @@ function scRender() {
                 // Monthly sales cells
                 var salesCells = '';
                 r.monthlySales.forEach(function(q){
-                    var scls = q === 0 ? 'color:var(--fg-soft);' : 'color:var(--navy);font-weight:600;';
+                    var scls = q === 0 ? 'color:var(--fg-soft);' : 'color:var(--navy);';
                     salesCells += '<td class="center" style="' + scls + 'font-variant-numeric:tabular-nums;background:rgba(212,162,76,0.08);">' + (q === 0 ? '—' : fmt(q)) + '</td>';
                 });
                 var statusColors = { understock:'#dc2626', tipis:'#d97706', aman:'#16a34a', dead:'#3b82f6' };
@@ -4343,15 +4343,15 @@ function scRender() {
                 var toCls  = r.to  < 1 ? 'color:#dc2626;' : (r.to  < 2 ? 'color:#d97706;' : 'color:#16a34a;');
                 function stkCell(v, highlight) {
                     var bg = highlight ? 'background:var(--navy-soft);' : '';
-                    var cls = v < 0 ? 'color:#ef4444;font-weight:700;' : (v === 0 ? 'color:var(--fg-soft);' : (highlight ? 'font-weight:700;' : ''));
+                    var cls = v < 0 ? 'color:#ef4444;' : (v === 0 ? 'color:var(--fg-soft);' : '');
                     return '<td class="center" style="' + cls + bg + 'font-variant-numeric:tabular-nums;">' + (v === 0 ? '—' : fmt(v)) + '</td>';
                 }
                 var firstCols;
                 if (scViewMode === 'sku') {
-                    firstCols = '<td style="font-family:ui-monospace,monospace;font-size:11px;font-weight:600;">' + esc(String(r.kode_kecil).toUpperCase()) + '</td>' +
-                                '<td class="center" style="font-family:ui-monospace,monospace;font-size:11px;">' + esc(r.size || '—') + '</td>';
+                    firstCols = '<td style="font-family:ui-monospace,monospace;">' + esc(String(r.kode_kecil).toUpperCase()) + '</td>' +
+                                '<td class="center" style="font-family:ui-monospace,monospace;">' + esc(r.size || '—') + '</td>';
                 } else {
-                    firstCols = '<td style="font-family:ui-monospace,monospace;font-size:11px;font-weight:600;">' + esc(String(r.kode_kecil).toUpperCase()) + '</td>';
+                    firstCols = '<td style="font-family:ui-monospace,monospace;">' + esc(String(r.kode_kecil).toUpperCase()) + '</td>';
                 }
                 return '<tr>' +
                     firstCols +
@@ -4360,7 +4360,7 @@ function scRender() {
                     '<td class="center">' + esc(r.gender || '—') + '</td>' +
                     '<td class="center">' + esc(r.tier || '—') + '</td>' +
                     salesCells +
-                    '<td class="center" style="font-weight:700;color:var(--gold);background:rgba(212,162,76,0.18);font-variant-numeric:tabular-nums;">' + (r.avgMonthly > 0 ? r.avgMonthly.toFixed(1) : '—') + '</td>' +
+                    '<td class="center" style="color:var(--gold);background:rgba(212,162,76,0.18);font-variant-numeric:tabular-nums;">' + (r.avgMonthly > 0 ? r.avgMonthly.toFixed(1) : '—') + '</td>' +
                     stkCell(r.WHS) + stkCell(r.WHB) + stkCell(r.WHJ) + stkCell(r.whTotal, true) +
                     stkCell(r.stokRetail, true) + stkCell(r.stokConsig, true) + stkCell(r.globalStock, true) +
                     '<td class="center" style="' + gapCls + gapBg + 'font-variant-numeric:tabular-nums;">' + fmt(Math.round(r.gap)) + '</td>' +
@@ -4669,7 +4669,7 @@ function scoRender() {
             tbody.innerHTML = display.map(function(r){
                 var salesCells = '';
                 r.monthlySales.forEach(function(qq){
-                    var scls = qq === 0 ? 'color:var(--fg-soft);' : 'color:var(--navy);font-weight:600;';
+                    var scls = qq === 0 ? 'color:var(--fg-soft);' : 'color:var(--navy);';
                     salesCells += '<td class="center" style="' + scls + 'font-variant-numeric:tabular-nums;background:rgba(212,162,76,0.08);">' + (qq === 0 ? '—' : fmt(qq)) + '</td>';
                 });
                 var statusColors = { understock:'#dc2626', tipis:'#d97706', aman:'#16a34a', dead:'#3b82f6' };
@@ -4682,15 +4682,15 @@ function scoRender() {
                 var twCls  = r.tw  < 2 ? 'color:#dc2626;' : (r.tw  < 4 ? 'color:#d97706;' : 'color:#16a34a;');
                 function stkCell(v, highlight) {
                     var bg = highlight ? 'background:var(--navy-soft);' : '';
-                    var cls = v < 0 ? 'color:#ef4444;font-weight:700;' : (v === 0 ? 'color:var(--fg-soft);' : (highlight ? 'font-weight:700;' : ''));
+                    var cls = v < 0 ? 'color:#ef4444;' : (v === 0 ? 'color:var(--fg-soft);' : '');
                     return '<td class="center" style="' + cls + bg + 'font-variant-numeric:tabular-nums;">' + (v === 0 ? '—' : fmt(v)) + '</td>';
                 }
                 var firstCols;
                 if (scoViewMode === 'sku') {
-                    firstCols = '<td style="font-family:ui-monospace,monospace;font-size:11px;font-weight:600;">' + esc(String(r.kode_kecil).toUpperCase()) + '</td>' +
-                                '<td class="center" style="font-family:ui-monospace,monospace;font-size:11px;">' + esc(r.size || '—') + '</td>';
+                    firstCols = '<td style="font-family:ui-monospace,monospace;">' + esc(String(r.kode_kecil).toUpperCase()) + '</td>' +
+                                '<td class="center" style="font-family:ui-monospace,monospace;">' + esc(r.size || '—') + '</td>';
                 } else {
-                    firstCols = '<td style="font-family:ui-monospace,monospace;font-size:11px;font-weight:600;">' + esc(String(r.kode_kecil).toUpperCase()) + '</td>';
+                    firstCols = '<td style="font-family:ui-monospace,monospace;">' + esc(String(r.kode_kecil).toUpperCase()) + '</td>';
                 }
                 return '<tr>' +
                     firstCols +
@@ -4699,7 +4699,7 @@ function scoRender() {
                     '<td class="center">' + esc(r.gender || '—') + '</td>' +
                     '<td class="center">' + esc(r.tier || '—') + '</td>' +
                     salesCells +
-                    '<td class="center" style="font-weight:700;color:var(--gold);background:rgba(212,162,76,0.18);font-variant-numeric:tabular-nums;">' + (r.avgMonthly > 0 ? r.avgMonthly.toFixed(1) : '—') + '</td>' +
+                    '<td class="center" style="color:var(--gold);background:rgba(212,162,76,0.18);font-variant-numeric:tabular-nums;">' + (r.avgMonthly > 0 ? r.avgMonthly.toFixed(1) : '—') + '</td>' +
                     stkCell(r.WHOB) + stkCell(r.WHOJ) + stkCell(r.whOnlineTotal, true) +
                     '<td class="center" style="' + gapCls + gapBg + 'font-variant-numeric:tabular-nums;">' + fmt(Math.round(r.gap)) + '</td>' +
                     '<td class="center" style="' + twCls  + twBg  + 'font-variant-numeric:tabular-nums;">' + (r.tw >= 999 ? '∞' : r.tw.toFixed(1)) + '</td>' +
