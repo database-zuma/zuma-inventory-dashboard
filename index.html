@@ -2687,10 +2687,17 @@ function renderStockByArea() {
     var cols = buildSbaColumns(area);
     // Stok per Area uses GLOBAL filter values (gf.*) — local sba inputs are hidden
     var hEl = document.getElementById('sbaHideEmpty');
-    var showWH = (document.getElementById('sbaShowWH') || {}).checked !== false;
-    var showToko = (document.getElementById('sbaShowToko') || {}).checked !== false;
-    var showConsig = (document.getElementById('sbaShowConsig') || {}).checked !== false;
     var _gf = (typeof gf !== 'undefined' && gf) ? gf : {};
+    // Channel filter drives which column groups appear:
+    //   retail       → only WH + Retail
+    //   warehouse    → only WH (warehouse-only view)
+    //   consignment  → only WH + Consignment
+    //   empty/other  → show all (WH + Retail + Consignment)
+    var ch = String(_gf.channel || '').toLowerCase();
+    var showWH = true;
+    var showToko = !ch || ch === 'retail';
+    var showConsig = !ch || ch === 'consignment';
+    if (ch === 'warehouse') { showToko = false; showConsig = false; }
     var q = (_gf.search || '').toLowerCase().trim();
     var tierF = _gf.tier || '';
     var verF = _gf.version || '';
