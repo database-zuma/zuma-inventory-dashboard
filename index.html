@@ -3965,8 +3965,12 @@ function invRender() {
     // KPI
     var totalSku = filtered.length;
     var totalStock = filtered.reduce(function(s,r){ return s + r.total; }, 0);
-    // Minus on Hand = count of (SKU × lokasi) pairs with stock < 0, matches the detail modal
-    var negCount = (typeof buildMinusOnHandRows === 'function') ? buildMinusOnHandRows().length : 0;
+    // Minus on Hand stats: lokasi count, unique artikel, sum pairs minus
+    var _minusRows = (typeof buildMinusOnHandRows === 'function') ? buildMinusOnHandRows() : [];
+    var negCount = _minusRows.length;
+    var _minusSet = {}; _minusRows.forEach(function(r){ _minusSet[r.kode_kecil] = true; });
+    var negArtikel = Object.keys(_minusSet).length;
+    var negPairs = _minusRows.reduce(function(s,r){ return s + r.stock; }, 0);
     // Count distinct stores/warehouses that have stock in current view
     var storeSet = {};
     items.forEach(function(it) {
@@ -3988,7 +3992,7 @@ function invRender() {
         kpi.innerHTML =
             '<div class="kpi-card kpi-primary"><div class="kpi-label">Total SKU</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular">' + fmt(totalSku) + '</span></span></div><div class="kpi-sub">' + esc(ent) + ' · ' + esc(invCurrentType) + '</div></div>' +
             '<div class="kpi-card"><div class="kpi-label">Total Stock</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular">' + fmt(totalStock) + '</span></span></div><div class="kpi-sub">pairs gabungan</div></div>' +
-            '<div class="kpi-card" ' + (negCount > 0 ? 'onclick="showMinusDetail()" style="cursor:pointer;" title="Klik untuk lihat detail lokasi stok minus"' : '') + '><div class="kpi-label">Minus on Hand</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular" style="color:' + (negCount > 0 ? '#ef4444' : 'inherit') + ';">' + fmt(negCount) + '</span></span></div><div class="kpi-sub">' + (negCount > 0 ? '🔍 Lokasi dengan stock < 0' : 'Tidak ada stock minus') + '</div></div>' +
+            '<div class="kpi-card" ' + (negCount > 0 ? 'onclick="showMinusDetail()" style="cursor:pointer;" title="Klik untuk lihat detail lokasi stok minus"' : '') + '><div class="kpi-label">Minus on Hand</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular" style="color:' + (negCount > 0 ? '#ef4444' : 'inherit') + ';">' + fmt(negCount) + '</span><span style="font-size:10px;color:var(--fg-soft);margin-left:5px;">lokasi</span></span></div><div class="kpi-sub">' + (negCount > 0 ? fmt(negArtikel) + ' artikel <span style="color:var(--fg-soft);">|</span> <span style="color:#ef4444;">' + fmt(negPairs) + ' pairs</span>' : 'Tidak ada stock minus') + '</div></div>' +
             '<div class="kpi-card"><div class="kpi-label">Total ' + storeLabel + '</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular">' + fmt(totalStores) + '</span></span></div><div class="kpi-sub">jumlah ' + storeLabel.toLowerCase() + ' aktif (stok ≠ 0)</div></div>';
     }
 
