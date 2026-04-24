@@ -4160,9 +4160,7 @@ function scRender() {
         }
         return true;
     });
-    rows.sort(function(a,b){ return b.globalStock - a.globalStock; });
-
-    scFiltered = rows;
+    // Sort by AVG/BLN happens AFTER sales computation below (avgMonthly not yet computed here)
 
     // Monthly sales setup — uses /api/sales/aggregate format (lowercase kode_kecil keys, month names 'jan','feb',...)
     var scChannel = (scCurrentType === 'online') ? 'online' : 'retail';
@@ -4193,6 +4191,9 @@ function scRender() {
         r.tw = r.avgMonthly > 0 ? r.whTotal / r.avgMonthly : (r.whTotal > 0 ? 999 : 0);
         r.to = r.avgMonthly > 0 ? r.stokRetail / r.avgMonthly : (r.stokRetail > 0 ? 999 : 0);
     });
+    // Sort by AVG/BLN descending (highest avg sales first)
+    rows.sort(function(a,b){ return b.avgMonthly - a.avgMonthly; });
+    scFiltered = rows;
 
     // Apply GAP / TW / TO filters (must run AFTER computation but BEFORE final render)
     var gapFilter = (document.getElementById('scGapFilter') || {}).value || '';
@@ -4548,7 +4549,7 @@ function scoRender() {
         }
         return true;
     });
-    rows.sort(function(a,b){ return b.whOnlineTotal - a.whOnlineTotal; });
+    // Final sort by AVG/BLN happens AFTER sales computation below
 
     // Sales: use ONLINE aggregate
     var salesMap = (typeof window.scSalesMap !== 'undefined' && window.scSalesMap.online) ? window.scSalesMap.online : {};
@@ -4573,6 +4574,8 @@ function scoRender() {
         else r.status = 'aman';
         r.tw = r.avgMonthly > 0 ? r.whOnlineTotal / r.avgMonthly : (r.whOnlineTotal > 0 ? 999 : 0);
     });
+    // Sort by AVG/BLN descending (highest avg sales first)
+    rows.sort(function(a,b){ return b.avgMonthly - a.avgMonthly; });
 
     // Apply GAP/TW filters
     var gapFilter = (document.getElementById('scoGapFilter') || {}).value || '';
