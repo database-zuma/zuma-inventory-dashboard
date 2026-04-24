@@ -2743,8 +2743,8 @@ function renderStockByArea() {
     var STORE_COL_W = 64;
 
     function storeHeaderCell(label, title) {
-        // Auto-fit width: min 56px so cell doesn't squeeze; no fixed max so long names can grow if needed
-        return '<th style="padding:6px 6px;background:' + HEADER_BG + ';color:rgba(255,255,255,0.9);font-weight:700;font-size:9px;text-align:center;min-width:56px;border-right:1px solid rgba(255,255,255,0.06);height:120px;letter-spacing:0.05em;text-transform:uppercase;white-space:nowrap;" title="' + _sbaEsc(title) + '"><div style="writing-mode:vertical-rl;transform:rotate(180deg);padding:4px 0;">' + _sbaEsc(label) + '</div></th>';
+        // Auto-fit width: min 56px; height 90px (was 120 — no group label above means less needed)
+        return '<th style="padding:6px 6px;background:' + HEADER_BG + ';color:rgba(255,255,255,0.9);font-weight:700;font-size:9px;text-align:center;min-width:56px;border-right:1px solid rgba(255,255,255,0.06);height:90px;letter-spacing:0.05em;text-transform:uppercase;white-space:nowrap;position:sticky;top:0;z-index:4;" title="' + _sbaEsc(title) + '"><div style="writing-mode:vertical-rl;transform:rotate(180deg);padding:4px 0;">' + _sbaEsc(label) + '</div></th>';
     }
 
     var showTokoCols = showToko ? cols.toko : [];
@@ -2766,28 +2766,20 @@ function renderStockByArea() {
 
     var thead = document.getElementById('sbaThead');
     if (thead) {
+        // Single-row header — no Retail/Consignment colspan group labels.
         var metaStyle = 'background:' + HEADER_BG + ';color:rgba(255,255,255,0.9);padding:8px 8px;font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;border-right:1px solid rgba(255,255,255,0.06);';
         var row1 = '<tr>';
         stickyMetaTh.forEach(function(m, idx) {
-            row1 += '<th rowspan="2" style="' + metaStyle + 'text-align:' + m.align + ';min-width:' + m.w + 'px;max-width:' + m.w + 'px;width:' + m.w + 'px;position:sticky;left:' + leftOffsets[idx] + 'px;top:0;z-index:6;">' + m.l + '</th>';
+            row1 += '<th style="' + metaStyle + 'text-align:' + m.align + ';min-width:' + m.w + 'px;max-width:' + m.w + 'px;width:' + m.w + 'px;position:sticky;left:' + leftOffsets[idx] + 'px;top:0;z-index:6;">' + m.l + '</th>';
         });
-        row1 += '<th rowspan="2" style="' + metaStyle + 'text-align:center;position:sticky;top:0;left:' + VER_LEFT + 'px;z-index:6;min-width:' + VER_W + 'px;max-width:' + VER_W + 'px;width:' + VER_W + 'px;">Ver</th>';
+        row1 += '<th style="' + metaStyle + 'text-align:center;position:sticky;top:0;left:' + VER_LEFT + 'px;z-index:6;min-width:' + VER_W + 'px;max-width:' + VER_W + 'px;width:' + VER_W + 'px;">Ver</th>';
         if (includeWhCol) {
-            row1 += '<th rowspan="2" style="' + metaStyle + 'text-align:center;position:sticky;top:0;left:' + WHB_LEFT + 'px;z-index:6;min-width:' + WH_COL_W + 'px;max-width:' + WH_COL_W + 'px;width:' + WH_COL_W + 'px;border-right:2px solid ' + HEADER_BG + ';background:linear-gradient(180deg,' + HEADER_BG + ' 0%,#003c53 100%);color:#00E273;">' + _sbaEsc(whLabel) + '</th>';
+            row1 += '<th style="' + metaStyle + 'text-align:center;position:sticky;top:0;left:' + WHB_LEFT + 'px;z-index:6;min-width:' + WH_COL_W + 'px;max-width:' + WH_COL_W + 'px;width:' + WH_COL_W + 'px;border-right:2px solid ' + HEADER_BG + ';background:linear-gradient(180deg,' + HEADER_BG + ' 0%,#003c53 100%);color:#00E273;">' + _sbaEsc(whLabel) + '</th>';
         }
-        if (showTokoCols.length) {
-            row1 += '<th colspan="' + showTokoCols.length + '" style="background:' + HEADER_BG + ';color:rgba(255,255,255,0.85);padding:6px;text-align:center;font-size:9px;font-weight:700;position:sticky;top:0;z-index:4;letter-spacing:0.12em;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,0.08);">Retail</th>';
-        }
-        if (showConsigCols.length) {
-            row1 += '<th colspan="' + showConsigCols.length + '" style="background:' + HEADER_BG + ';color:rgba(255,255,255,0.85);padding:6px;text-align:center;font-size:9px;font-weight:700;position:sticky;top:0;z-index:4;letter-spacing:0.12em;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,0.08);">Consignment</th>';
-        }
-        row1 += '<th rowspan="2" style="' + metaStyle + 'position:sticky;right:0;top:0;z-index:7;text-align:right;border-left:2px solid ' + HEADER_BG + ';">Total</th></tr>';
-
-        var row2 = '<tr>';
-        showTokoCols.forEach(function(n) { row2 += storeHeaderCell(_sbaShortStore(n), n); });
-        showConsigCols.forEach(function(n) { row2 += storeHeaderCell(_sbaShortStore(n), n); });
-        row2 += '</tr>';
-        thead.innerHTML = row1 + row2;
+        showTokoCols.forEach(function(n) { row1 += storeHeaderCell(_sbaShortStore(n), n); });
+        showConsigCols.forEach(function(n) { row1 += storeHeaderCell(_sbaShortStore(n), n); });
+        row1 += '<th style="' + metaStyle + 'position:sticky;right:0;top:0;z-index:7;text-align:right;border-left:2px solid ' + HEADER_BG + ';">Total</th></tr>';
+        thead.innerHTML = row1;
     }
 
     var visibleStoreCount = (includeWhCol ? 1 : 0) + showTokoCols.length + showConsigCols.length;
