@@ -3840,7 +3840,8 @@ function invRender() {
     invCurrentType = gf.channel;
     var items = invGetSourceItems();
     var q = (gf.search || '').toLowerCase().trim();
-    var area = gf.area || '';
+    // Area filter intentionally NOT applied to Stock Summary — only drives Per Area sub-tab
+    var area = '';
     var store = gf.store || '';
     var tier = gf.tier || '';
     var gender = gf.gender || '';
