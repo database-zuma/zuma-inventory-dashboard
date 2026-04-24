@@ -3632,20 +3632,21 @@ async function exportStockOnHand(type, entity) {
     var storeMap = {};
     allRows.forEach(function(r) { var k = r.store || 'Other'; if (!storeMap[k]) storeMap[k] = []; storeMap[k].push(r); });
     var storeCount = Object.keys(storeMap).length;
-    // Only include SEMUA + MINUS ON HAND summary sheets when more than 1 store/WH
+    // SEMUA summary sheet only when more than 1 store/WH (redundant if single-store)
     if (storeCount > 1) {
         var wsSemua = XLSX.utils.aoa_to_sheet(toAoa(allRows));
         wsSemua['!cols'] = stockColWidths.slice();
         applyTableStyle(wsSemua, stockLeftCols); addTierSummary(wsSemua, allRows, 10, 16);
         applyHighlightCols(wsSemua, allRows.length);
         XLSX.utils.book_append_sheet(wb, wsSemua, 'SEMUA');
-        if (minusRows.length > 0) {
-            var wsMinus = XLSX.utils.aoa_to_sheet(toAoa(minusRows));
-            wsMinus['!cols'] = stockColWidths.slice();
-            applyTableStyle(wsMinus, stockLeftCols); addTierSummaryNoPercent(wsMinus, minusRows, 10);
-            applyHighlightCols(wsMinus, minusRows.length);
-            XLSX.utils.book_append_sheet(wb, wsMinus, 'MINUS ON HAND');
-        }
+    }
+    // MINUS ON HAND always included if there are minus rows (useful per-store too)
+    if (minusRows.length > 0) {
+        var wsMinus = XLSX.utils.aoa_to_sheet(toAoa(minusRows));
+        wsMinus['!cols'] = stockColWidths.slice();
+        applyTableStyle(wsMinus, stockLeftCols); addTierSummaryNoPercent(wsMinus, minusRows, 10);
+        applyHighlightCols(wsMinus, minusRows.length);
+        XLSX.utils.book_append_sheet(wb, wsMinus, 'MINUS ON HAND');
     }
     Object.keys(storeMap).sort().forEach(function(s) {
         var wsStore = XLSX.utils.aoa_to_sheet(toAoa(storeMap[s]));
