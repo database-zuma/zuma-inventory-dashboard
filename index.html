@@ -1044,8 +1044,8 @@ html, body {
   <!-- View: Per Area (pivot stok per area per zona logistik) -->
   <div id="invViewPerarea" style="display:none;">
 <!-- HEADER -->
-  <!-- AREA TABS -->
-  <div class="tab-nav" id="sbaAreaTabs"></div>
+  <!-- AREA TABS hidden — global filter Area dropdown drives sba area selection -->
+  <div class="tab-nav" id="sbaAreaTabs" style="display:none;"></div>
 
   <!-- FILTER BAR hidden — uses global filter bar at top -->
   <div class="filter-bar" style="display:none;">
@@ -2654,6 +2654,18 @@ function _sbaCellColor(q) {
 }
 
 function renderStockByArea() {
+    // Sync sbaCurrentArea from global filter Area. Sba uses 3 zones; map fine-grained
+    // global areas down: Bali/Lombok→Bali, Jakarta→Jakarta, Jatim/Batam/Sulawesi/Sumatera→Jatim
+    function _gfAreaToZone(a) {
+        if (!a) return null;
+        var s = String(a).toLowerCase();
+        if (s === 'bali' || s === 'lombok') return 'Bali';
+        if (s === 'jakarta') return 'Jakarta';
+        if (s === 'jawa timur' || s === 'jatim' || s === 'batam' || s === 'sulawesi' || s === 'sumatera' || s === 'sumatra') return 'Jatim';
+        return null;
+    }
+    var _zone = _gfAreaToZone((typeof gf !== 'undefined' && gf && gf.area) ? gf.area : '');
+    if (_zone && _zone !== sbaCurrentArea) sbaCurrentArea = _zone;
     var area = sbaCurrentArea;
     var rows = buildStockByAreaRows(area);
     var cols = buildSbaColumns(area);
