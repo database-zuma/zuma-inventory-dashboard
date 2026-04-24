@@ -3968,7 +3968,11 @@ function invRender() {
     // Minus on Hand stats: distinct lokasi (stores), distinct artikel (kode_kecil), total pairs minus
     var _minusRows = (typeof buildMinusOnHandRows === 'function') ? buildMinusOnHandRows() : [];
     var _storeSet = {}, _artikelSet = {};
-    _minusRows.forEach(function(r){ if (r.store) _storeSet[r.store] = true; if (r.kode_kecil) _artikelSet[r.kode_kecil] = true; });
+    _minusRows.forEach(function(r){
+        var sKey = String(r.store || '').trim().toLowerCase();
+        if (sKey) _storeSet[sKey] = true;
+        if (r.kode_kecil) _artikelSet[r.kode_kecil] = true;
+    });
     var negCount = Object.keys(_storeSet).length;
     var negArtikel = Object.keys(_artikelSet).length;
     var negPairs = _minusRows.reduce(function(s,r){ return s + r.stock; }, 0);
@@ -4077,7 +4081,10 @@ function buildMinusOnHandRows() {
             if (store && s !== store) return;
             var v = Number(ss[s]) || 0;
             if (v === 0) return;
-            var key = kk + '||' + s;
+            // Normalize store name for aggregation key (lowercase + trim) so "Zuma PTC" and
+            // "Zuma PTC " from different entities merge into one row.
+            var sNorm = String(s).trim().toLowerCase();
+            var key = kk + '||' + sNorm;
             if (!agg[key]) {
                 agg[key] = {
                     kode: (it.kode || '').toUpperCase(),
@@ -4086,7 +4093,7 @@ function buildMinusOnHandRows() {
                     size: it.size || '',
                     tier: it.tier || '',
                     gender: it.gender || '',
-                    store: s,
+                    store: String(s).trim(), // display: trimmed original case
                     area: (typeof getAreaFromStore === 'function') ? getAreaFromStore(s) : '',
                     stock: 0
                 };
