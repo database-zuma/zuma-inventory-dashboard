@@ -1151,10 +1151,10 @@ html, body {
     </label>
   </div>
 
-  <!-- Stock Summary (6 cards: WH Pusat/Bali/Jakarta + Retail/Consig/Global) -->
-  <div class="kpi-grid" id="scStockSummary" style="grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:10px;"></div>
+  <!-- Stock Summary cards removed — keep GAP KPI (clickable filter) -->
+  <div id="scStockSummary" style="display:none;"></div>
 
-  <!-- GAP Analysis KPI (4 cards) -->
+  <!-- GAP Analysis KPI (4 cards, clickable to filter) -->
   <div class="kpi-grid" id="scKpi" style="grid-template-columns:repeat(4,1fr);"></div>
 
   <!-- Table -->
@@ -1169,7 +1169,7 @@ html, body {
         Export Excel
       </button>
     </div>
-    <div class="table-wrap" style="max-height:68vh;overflow:auto;">
+    <div class="table-wrap" style="max-height:80vh;overflow:auto;">
       <table class="data" id="scTable" style="width:100%;">
         <thead id="scThead"></thead>
         <tbody id="scTbody"></tbody>
@@ -1214,10 +1214,10 @@ html, body {
       </label>
     </div>
 
-    <!-- Stock Summary (3 cards: WH O.Bali / WH O.Jkt / Online Total) -->
-    <div class="kpi-grid" id="scoStockSummary" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;"></div>
+    <!-- Stock Summary cards removed — keep GAP KPI (clickable filter) -->
+    <div id="scoStockSummary" style="display:none;"></div>
 
-    <!-- GAP Analysis KPI (4 cards) -->
+    <!-- GAP Analysis KPI (4 cards, clickable to filter) -->
     <div class="kpi-grid" id="scoKpi" style="grid-template-columns:repeat(4,1fr);"></div>
 
     <!-- Table -->
@@ -1232,7 +1232,7 @@ html, body {
           Export Excel
         </button>
       </div>
-      <div class="table-wrap" style="max-height:68vh;overflow:auto;">
+      <div class="table-wrap" style="max-height:80vh;overflow:auto;">
         <table class="data" id="scoTable" style="width:100%;">
           <thead id="scoThead"></thead>
           <tbody id="scoTbody"></tbody>
