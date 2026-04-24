@@ -2655,9 +2655,18 @@ function _sbaCellColor(q) {
 }
 
 function renderStockByArea() {
-    // Sync sbaCurrentArea from global filter (gf.area). Empty gf.area defaults to Bali.
-    var _gfa = (typeof gf !== 'undefined' && gf && gf.area) ? gf.area : '';
-    if (_gfa && _gfa !== sbaCurrentArea) sbaCurrentArea = _gfa;
+    // Sync sbaCurrentArea from global filter (gf.area). Sba uses 3 zones (Bali/Jakarta/Jatim);
+    // global filter has 7 fine-grained areas, so map them down.
+    function _gfAreaToZone(a) {
+        if (!a) return null;
+        var s = String(a).toLowerCase();
+        if (s === 'bali' || s === 'lombok') return 'Bali';
+        if (s === 'jakarta') return 'Jakarta';
+        if (s === 'jawa timur' || s === 'jatim' || s === 'batam' || s === 'sulawesi' || s === 'sumatera' || s === 'sumatra') return 'Jatim';
+        return null;
+    }
+    var _zone = _gfAreaToZone((typeof gf !== 'undefined' && gf && gf.area) ? gf.area : '');
+    if (_zone && _zone !== sbaCurrentArea) sbaCurrentArea = _zone;
     var area = sbaCurrentArea;
     var rows = buildStockByAreaRows(area);
     var cols = buildSbaColumns(area);
