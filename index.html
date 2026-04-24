@@ -1112,33 +1112,30 @@ html, body {
   <!-- ============== RETAIL SECTION ============== -->
   <div id="scRetailSection">
 
-  <!-- View Mode Toggle -->
-  <div style="display:flex;gap:8px;margin-bottom:10px;">
-    <button id="scViewSku" class="btn" onclick="scSwitchView('sku')" style="padding:6px 14px;font-size:12px;">Analysis By Kode Barang</button>
-    <button id="scViewKK" class="btn btn-primary" onclick="scSwitchView('kodeKecil')" style="padding:6px 14px;font-size:12px;">Analysis By Kode Kecil</button>
-  </div>
-
-  <!-- Filters: GAP + TW + TO + hide-zero -->
-  <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-      <label class="filter-label" style="margin:0;">GAP Status</label>
-      <select id="scGapFilter" class="filter-select" onchange="scRender()" style="min-width:150px;">
+  <!-- View Mode Toggle + Filters (single row) -->
+  <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap;align-items:center;">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button id="scViewSku" class="btn" onclick="scSwitchView('sku')" style="padding:6px 14px;font-size:12px;">Analysis By Kode Barang</button>
+      <button id="scViewKK" class="btn btn-primary" onclick="scSwitchView('kodeKecil')" style="padding:6px 14px;font-size:12px;">Analysis By Kode Kecil</button>
+      <span style="width:1px;height:24px;background:var(--border);margin:0 4px;"></span>
+      <label class="filter-label" style="margin:0;">GAP</label>
+      <select id="scGapFilter" class="filter-select" onchange="scRender()" style="min-width:130px;">
         <option value="">Semua</option>
         <option value="understock">🔴 Understock</option>
         <option value="tipis">🟡 Tipis</option>
         <option value="aman">🟢 Aman</option>
         <option value="dead">💀 Dead Stock</option>
       </select>
-      <label class="filter-label" style="margin:0;">TW Status</label>
-      <select id="scTwFilter" class="filter-select" onchange="scRender()" style="min-width:140px;">
+      <label class="filter-label" style="margin:0;">TW</label>
+      <select id="scTwFilter" class="filter-select" onchange="scRender()" style="min-width:120px;">
         <option value="">Semua</option>
         <option value="critical">&lt;2 (Critical)</option>
         <option value="low">2-4 (Low)</option>
         <option value="normal">4-8 (Normal)</option>
         <option value="high">&gt;8 (High)</option>
       </select>
-      <label class="filter-label" style="margin:0;">TO Status</label>
-      <select id="scToFilter" class="filter-select" onchange="scRender()" style="min-width:140px;">
+      <label class="filter-label" style="margin:0;">TO</label>
+      <select id="scToFilter" class="filter-select" onchange="scRender()" style="min-width:120px;">
         <option value="">Semua</option>
         <option value="critical">&lt;1 (Critical)</option>
         <option value="low">1-2 (Low)</option>
@@ -1183,25 +1180,22 @@ html, body {
   <!-- ============== ONLINE SECTION ============== -->
   <div id="scOnlineSection" style="display:none;">
 
-    <!-- View Mode Toggle -->
-    <div style="display:flex;gap:8px;margin-bottom:10px;">
-      <button id="scoViewSku" class="btn" onclick="scoSwitchView('sku')" style="padding:6px 14px;font-size:12px;">Analysis By Kode Barang</button>
-      <button id="scoViewKK" class="btn btn-primary" onclick="scoSwitchView('kodeKecil')" style="padding:6px 14px;font-size:12px;">Analysis By Kode Kecil</button>
-    </div>
-
-    <!-- Filters: GAP + TW + hide-zero -->
-    <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-        <label class="filter-label" style="margin:0;">GAP Status</label>
-        <select id="scoGapFilter" class="filter-select" onchange="scoRender()" style="min-width:150px;">
+    <!-- View Mode Toggle + Filters (single row) -->
+    <div style="display:flex;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap;align-items:center;">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button id="scoViewSku" class="btn" onclick="scoSwitchView('sku')" style="padding:6px 14px;font-size:12px;">Analysis By Kode Barang</button>
+        <button id="scoViewKK" class="btn btn-primary" onclick="scoSwitchView('kodeKecil')" style="padding:6px 14px;font-size:12px;">Analysis By Kode Kecil</button>
+        <span style="width:1px;height:24px;background:var(--border);margin:0 4px;"></span>
+        <label class="filter-label" style="margin:0;">GAP</label>
+        <select id="scoGapFilter" class="filter-select" onchange="scoRender()" style="min-width:130px;">
           <option value="">Semua</option>
           <option value="understock">🔴 Understock</option>
           <option value="tipis">🟡 Tipis</option>
           <option value="aman">🟢 Aman</option>
           <option value="dead">💀 Dead Stock</option>
         </select>
-        <label class="filter-label" style="margin:0;">TW Status</label>
-        <select id="scoTwFilter" class="filter-select" onchange="scoRender()" style="min-width:140px;">
+        <label class="filter-label" style="margin:0;">TW</label>
+        <select id="scoTwFilter" class="filter-select" onchange="scoRender()" style="min-width:120px;">
           <option value="">Semua</option>
           <option value="critical">&lt;2 (Critical)</option>
           <option value="low">2-4 (Low)</option>
