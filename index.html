@@ -1044,8 +1044,8 @@ html, body {
   <!-- View: Per Area (pivot stok per area per zona logistik) -->
   <div id="invViewPerarea" style="display:none;">
 <!-- HEADER -->
-  <!-- AREA TABS -->
-  <div class="tab-nav" id="sbaAreaTabs"></div>
+  <!-- AREA TABS hidden — global filter bar Area dropdown handles area selection -->
+  <div class="tab-nav" id="sbaAreaTabs" style="display:none;"></div>
 
   <!-- FILTER BAR hidden — uses global filter bar at top -->
   <div class="filter-bar" style="display:none;">
@@ -1064,8 +1064,8 @@ html, body {
     <span><span style="display:inline-block;width:8px;height:8px;background:#ef4444;border-radius:50%;vertical-align:middle;margin-right:3px;"></span>≤0 <span style="display:inline-block;width:8px;height:8px;background:#f59e0b;border-radius:50%;vertical-align:middle;margin:0 3px 0 8px;"></span>1–5 <span style="display:inline-block;width:8px;height:8px;background:#00E273;border-radius:50%;vertical-align:middle;margin:0 3px 0 8px;"></span>≥6</span>
   </div>
 
-  <!-- KPI -->
-  <div class="kpi-grid" id="sbaSummary"></div>
+  <!-- KPI hidden -->
+  <div id="sbaSummary" style="display:none;"></div>
 
   <!-- TABLE CARD -->
   <div class="card">
@@ -2655,6 +2655,9 @@ function _sbaCellColor(q) {
 }
 
 function renderStockByArea() {
+    // Sync sbaCurrentArea from global filter (gf.area). Empty gf.area defaults to Bali.
+    var _gfa = (typeof gf !== 'undefined' && gf && gf.area) ? gf.area : '';
+    if (_gfa && _gfa !== sbaCurrentArea) sbaCurrentArea = _gfa;
     var area = sbaCurrentArea;
     var rows = buildStockByAreaRows(area);
     var cols = buildSbaColumns(area);
