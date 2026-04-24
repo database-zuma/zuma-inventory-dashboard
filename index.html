@@ -4381,7 +4381,7 @@ function scRender() {
                     stkCell(r.stokRetail, true) + stkCell(r.stokConsig, true) + stkCell(r.globalStock, true) +
                     '<td class="center" style="' + gapCls + gapBg + 'font-variant-numeric:tabular-nums;">' + fmt(Math.round(r.gap)) + '</td>' +
                     '<td class="center" style="' + twCls  + twBg  + 'font-variant-numeric:tabular-nums;">' + (r.tw >= 999 ? '0.0' : r.tw.toFixed(1)) + '</td>' +
-                    '<td class="center" style="' + toCls  + toBg  + 'font-variant-numeric:tabular-nums;">' + (r.to >= 999 ? '∞' : r.to.toFixed(1)) + '</td>' +
+                    '<td class="center" style="' + toCls  + toBg  + 'font-variant-numeric:tabular-nums;">' + (r.to >= 999 ? '0.0' : r.to.toFixed(1)) + '</td>' +
                     '<td class="center"><span style="display:inline-block;padding:2px 8px;border-radius:3px;background:' + sColor + ';color:#fff;font-size:9.5px;font-weight:700;">' + (statusLabels[r.status] || '—') + '</span></td>' +
                     '</tr>';
             }).join('');
