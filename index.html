@@ -4086,16 +4086,17 @@ function scRender() {
         return m ? (m[monthName] || 0) : 0;
     }
 
-    // Compute avg sales + GAP classification per row (using globalStock as basis)
-    var nMonths = Math.max(1, monthCols.length);
+    // Compute avg sales + GAP classification per row (master formula: 90-day rolling window scaled to 30-day month)
+    // avgMonthly = totalSales / _days * 30  (so 4 months data still divides by 90 days, not by month count)
+    // gap = stock - (avgMonthly * 3)   (3-month forecast horizon)
+    var days = salesMap._days || 90;
     rows.forEach(function(r) {
         var totalSales = 0;
         r.monthlySales = [];
         monthCols.forEach(function(mi){ var q = getSalesQty(r.kode_kecil, mi); r.monthlySales.push(q); totalSales += q; });
         r.totalSales = totalSales;
-        r.avgMonthly = totalSales / nMonths;
-        // TW uses WH total (master), TO uses retail stock (master)
-        r.gap = r.globalStock - r.avgMonthly;
+        r.avgMonthly = totalSales / days * 30;
+        r.gap = r.globalStock - (r.avgMonthly * 3);
         if (r.avgMonthly === 0 && r.globalStock > 0) r.status = 'dead';
         else if (r.gap < 0) r.status = 'understock';
         else if (r.gap < r.avgMonthly) r.status = 'tipis';
@@ -4191,7 +4192,7 @@ function scRender() {
     // Build table header — MASTER style
     var thead = document.getElementById('scThead');
     if (thead) {
-        var goldBg = 'background:rgba(212,162,76,0.15);color:var(--navy);';
+        var goldBg = 'background:rgba(212,162,76,0.85);color:#fff;';
         var navyBg = 'background:#002A3A;color:#fff;';
         var h = '<tr>';
         if (scViewMode === 'sku') {
