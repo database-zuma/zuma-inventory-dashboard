@@ -8,7 +8,22 @@
 <meta http-equiv="Expires" content="0">
 <title>Zuma Inventory Analytics</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<!-- xlsx-js-style loaded on-demand by ensureXlsx() — saves ~425 KB on first paint -->
+<script>
+  window._xlsxLoadingPromise = null;
+  window.ensureXlsx = function() {
+    if (typeof XLSX !== 'undefined') return Promise.resolve();
+    if (window._xlsxLoadingPromise) return window._xlsxLoadingPromise;
+    window._xlsxLoadingPromise = new Promise(function(resolve, reject) {
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
+      s.onload = function(){ resolve(); };
+      s.onerror = function(e){ window._xlsxLoadingPromise = null; reject(e); };
+      document.head.appendChild(s);
+    });
+    return window._xlsxLoadingPromise;
+  };
+</script>
 <style>
 
 /* === BASE from stockbyarea === */
@@ -1382,7 +1397,8 @@ async function loadAllData() {
     const overlay = document.getElementById('api-loading-overlay');
     if (overlay) overlay.style.display = 'flex';
 
-    var total = 5, done = 0;
+    // Critical path: 4 endpoints that block UI render. Consignment + sales moved to background.
+    var total = 4, done = 0;
     function progress(label) {
         done++;
         var pct = Math.round((done/total)*100);
@@ -1398,16 +1414,13 @@ async function loadAllData() {
     }
 
     try {
-        const [stock, consig, storeAreas, maxStock, assort] = await Promise.all([
+        const [stock, storeAreas, maxStock, assort] = await Promise.all([
             trackFetch('/api/stock', 'Data stok dimuat…', {}),
-            trackFetch('/api/stock/consignment', 'Stok konsinyasi dimuat…', { data: [] }),
             trackFetch('/api/store-areas', 'Data area dimuat…', {}),
             trackFetch('/api/max-stock', 'Max stock dimuat…', {}),
             trackFetch('/api/assortment', 'Assortment dimuat…', {}),
         ]);
         allData = stock || {};
-        consignmentStockItems = (consig && consig.data) ? consig.data : [];
-        consignmentStockData = consig && consig.data ? consig : { data: [] };
         storeAreaMap = storeAreas || {};
         maxStockMap = maxStock || {};
         assortmentMap = assort || {};
@@ -1420,6 +1433,14 @@ async function loadAllData() {
         _dataLoaded = true;
         // Populate global filter dropdowns now that data is available
         try { if (typeof gfPopulateDependentFilters === 'function') gfPopulateDependentFilters(); } catch(e) { console.warn('gf populate:', e); }
+
+        // Background fetch: consignment stock (~2s, only used by stockcontrol consig column + Stock On-Hand consig export)
+        fetchAPI('/api/stock/consignment').then(function(consig) {
+            consignmentStockItems = (consig && consig.data) ? consig.data : [];
+            consignmentStockData = consig && consig.data ? consig : { data: [] };
+            console.log('[BG] consignment loaded: ' + consignmentStockItems.length + ' items');
+            if (activeTab === 'stockcontrol' && typeof scRender === 'function') scRender();
+        }).catch(function(e){ console.warn('Consignment fetch:', e); consignmentStockItems = []; consignmentStockData = { data: [] }; });
 
         // Background fetch: sales aggregate (pre-aggregated per kode_kecil) — matches master
         // Format: { kode_kecil_lowercase: { jan: qty, feb: qty, ... }, _months: ['jan','feb','mar'], _days: 90 }
@@ -2172,9 +2193,9 @@ function applyTableStyle(ws, leftCols) {
     }
 }
 
-function exportCurrent() {
+async function exportCurrent() {
     if (!rdData) { alert('Data belum dimuat'); return; }
-    if (typeof XLSX === 'undefined') { alert('Library XLSX belum ter-load'); return; }
+    try { await window.ensureXlsx(); } catch(e) { alert('Gagal load library XLSX'); return; }
     if (rdCurrentTab === 'detail') exportRdDetail(); else exportRdTransfer();
 }
 
@@ -3395,8 +3416,8 @@ function addTierSummaryNoPercent(ws, rows, tierIdx) {
 }
 
 // === Export: Stock On-Hand (Retail/Warehouse per entity) ===
-function exportStockOnHand(type, entity) {
-    if (typeof XLSX === 'undefined') { toast('Library XLSX belum ter-load', true); return; }
+async function exportStockOnHand(type, entity) {
+    try { await window.ensureXlsx(); } catch(e) { toast('Gagal load library XLSX', true); return; }
     var entityData = allData[entity];
     if (!entityData) { toast('Data ' + entity + ' belum dimuat', true); return; }
     var wb = XLSX.utils.book_new();
@@ -3497,8 +3518,8 @@ function exportStockOnHand(type, entity) {
 }
 
 // === Export: Consignment per entity ===
-function exportConsig(entity) {
-    if (typeof XLSX === 'undefined') { toast('Library XLSX belum ter-load', true); return; }
+async function exportConsig(entity) {
+    try { await window.ensureXlsx(); } catch(e) { toast('Gagal load library XLSX', true); return; }
     var items = (consignmentStockItems || []).filter(function(i) { return (i.entity||'').toUpperCase() === entity; });
     if (!items.length) { toast('Tidak ada data consignment ' + entity, true); return; }
     var wb = XLSX.utils.book_new();
@@ -3556,8 +3577,8 @@ function exportConsig(entity) {
 }
 
 // === Export: WH Online Bali + Jakarta ===
-function exportWHOnline() {
-    if (typeof XLSX === 'undefined') { toast('Library XLSX belum ter-load', true); return; }
+async function exportWHOnline() {
+    try { await window.ensureXlsx(); } catch(e) { toast('Gagal load library XLSX', true); return; }
     var entities = ['DDD', 'MBB', 'LJBB', 'UBB'];
     var wb = XLSX.utils.book_new();
     var headers = ['Warehouse', 'Kode Barang', 'Kode Kecil', 'Kode Mix', 'Kode Mix Size', 'Nama Barang', 'Size', 'Gender', 'Series', 'Tipe', 'Count Assortment', 'Tier', 'Version', 'Stock'];
@@ -4269,9 +4290,9 @@ function scRender() {
     }
 }
 
-function scExportExcel() {
-    if (typeof XLSX === 'undefined') { alert('SheetJS library not loaded. Please refresh the page.'); return; }
+async function scExportExcel() {
     if (!scFiltered || !scFiltered.length) { alert('Tidak ada data untuk export'); return; }
+    try { await window.ensureXlsx(); } catch(e) { alert('Gagal load library XLSX'); return; }
 
     var scChannel = (scCurrentType === 'online') ? 'online' : 'retail';
     var salesMap = (typeof window.scSalesMap !== 'undefined' && window.scSalesMap[scChannel]) ? window.scSalesMap[scChannel] : {};
