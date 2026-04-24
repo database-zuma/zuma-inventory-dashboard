@@ -2776,14 +2776,21 @@ function renderStockByArea() {
         if (includeWhCol) {
             row1 += '<th style="' + metaStyle + 'text-align:center;position:sticky;top:0;left:' + WHB_LEFT + 'px;z-index:6;min-width:' + WH_COL_W + 'px;max-width:' + WH_COL_W + 'px;width:' + WH_COL_W + 'px;border-right:2px solid ' + HEADER_BG + ';background:linear-gradient(180deg,' + HEADER_BG + ' 0%,#003c53 100%);color:#00E273;">' + _sbaEsc(whLabel) + '</th>';
         }
+        // Subtotal columns (Total Toko / Total Consig) — per visible channel group
+        var SUBTOTAL_W = 70;
+        var subtotalStyle = 'padding:6px 6px;background:linear-gradient(180deg,' + HEADER_BG + ' 0%,#003c53 100%);color:#D4A24C;font-weight:700;font-size:9.5px;text-align:center;min-width:' + SUBTOTAL_W + 'px;max-width:' + SUBTOTAL_W + 'px;width:' + SUBTOTAL_W + 'px;border-right:2px solid #cbd5e1;letter-spacing:0.08em;text-transform:uppercase;';
+        if (showTokoCols.length) row1 += '<th style="' + subtotalStyle + '">Total Toko</th>';
         showTokoCols.forEach(function(n) { row1 += storeHeaderCell(_sbaShortStore(n), n); });
+        if (showConsigCols.length) row1 += '<th style="' + subtotalStyle + '">Total Consig</th>';
         showConsigCols.forEach(function(n) { row1 += storeHeaderCell(_sbaShortStore(n), n); });
         row1 += '<th style="' + metaStyle + 'position:sticky;right:0;top:0;z-index:7;text-align:right;border-left:2px solid ' + HEADER_BG + ';">Total</th></tr>';
         thead.innerHTML = row1;
     }
 
     var visibleStoreCount = (includeWhCol ? 1 : 0) + showTokoCols.length + showConsigCols.length;
-    var totalCols = stickyMetaTh.length + 1 + visibleStoreCount + 1;
+    // + 1 per active subtotal column (Total Toko / Total Consig)
+    var subtotalCols = (showTokoCols.length ? 1 : 0) + (showConsigCols.length ? 1 : 0);
+    var totalCols = stickyMetaTh.length + 1 + visibleStoreCount + subtotalCols + 1;
     var countEl = document.getElementById('sbaCountInfo');
     if (countEl) countEl.textContent = filtered.length.toLocaleString('id-ID') + ' SKU · ' + sumQty.toLocaleString('id-ID') + ' qty · ' + visibleStoreCount + ' kolom (1 WH · ' + showTokoCols.length + ' toko · ' + showConsigCols.length + ' consig)';
 
@@ -2817,7 +2824,14 @@ function renderStockByArea() {
         out += '<td style="padding:6px 8px;text-align:center;color:#334155;background:' + rowBg + ';position:sticky;left:' + leftOffsets[4] + 'px;z-index:1;border-right:1px solid #e5e7eb;border-bottom:1px solid #f1f5f9;font-size:11px;min-width:' + stickyMetaTh[4].w + 'px;max-width:' + stickyMetaTh[4].w + 'px;width:' + stickyMetaTh[4].w + 'px;">' + _sbaEsc(r.tier || '—') + '</td>';
         out += '<td style="padding:6px 8px;text-align:center;color:#64748b;background:' + rowBg + ';position:sticky;left:' + VER_LEFT + 'px;z-index:1;border-right:' + (includeWhCol ? '1px solid #e5e7eb' : '2px solid #cbd5e1') + ';border-bottom:1px solid #f1f5f9;font-size:11px;min-width:' + VER_W + 'px;max-width:' + VER_W + 'px;width:' + VER_W + 'px;">' + _sbaEsc(r.version || '—') + '</td>';
         if (includeWhCol) out += cellWhAgg(r.whQty);
+        // Subtotal cells — Total Toko / Total Consig (highlighted, tabular)
+        var subTotalCell = function(v) {
+            var c = _sbaCellColor(v);
+            return '<td style="padding:5px 6px;text-align:center;font-weight:700;color:' + c.fg + ';font-size:11.5px;background:' + c.bg + ';min-width:70px;max-width:70px;width:70px;border-right:2px solid #cbd5e1;border-bottom:1px solid #f1f5f9;font-variant-numeric:tabular-nums;">' + v.toLocaleString('id-ID') + '</td>';
+        };
+        if (showTokoCols.length) out += subTotalCell(r.tokoQty || 0);
         for (var j = 0; j < showTokoCols.length; j++)  out += cellQty(r.tokoStores[showTokoCols[j]] || 0);
+        if (showConsigCols.length) out += subTotalCell(r.consigQty || 0);
         for (var k = 0; k < showConsigCols.length; k++) out += cellQty(r.consigStores[showConsigCols[k]] || 0);
         out += '<td style="padding:6px 10px;text-align:right;font-weight:700;color:#002A3A;background:' + rowBg + ';position:sticky;right:0;z-index:1;border-left:2px solid #cbd5e1;border-bottom:1px solid #f1f5f9;font-size:11.5px;font-variant-numeric:tabular-nums;">' + rowTotal.toLocaleString('id-ID') + '</td>';
         out += '</tr>';
