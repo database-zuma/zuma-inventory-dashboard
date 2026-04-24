@@ -4240,11 +4240,12 @@ function scRender() {
         Object.values(it.store_stock).forEach(function(v){ row.stokConsig += Number(v) || 0; });
     });
 
-    // Compute derived fields per row — WH Online included in Stok Global (master parity)
+    // Compute derived fields per row. Retail sub-tab's Stok Global excludes WH Online
+    // since Online is now a separate sub-tab with its own totals.
     Object.values(byKK).forEach(function(r) {
         r.whTotal = r.WHS + r.WHB + r.WHJ;
         r.whOnlineTotal = r.WHOB + r.WHOJ;
-        r.globalStock = r.whTotal + r.whOnlineTotal + r.stokRetail + r.stokConsig;
+        r.globalStock = r.whTotal + r.stokRetail + r.stokConsig;
         r.total = r.globalStock; // for compat
     });
 
@@ -4356,7 +4357,8 @@ function scRender() {
         if (!it.store_stock) return;
         Object.values(it.store_stock).forEach(function(v){ aggConsig += Number(v) || 0; });
     });
-    var aggGlobal = aggWH['Jawa Timur'] + aggWH['Bali'] + aggWH['Jakarta'] + aggOnline + aggRetail + aggConsig;
+    // Retail Stok Global excludes aggOnline — Online has its own sub-tab
+    var aggGlobal = aggWH['Jawa Timur'] + aggWH['Bali'] + aggWH['Jakarta'] + aggRetail + aggConsig;
 
     var summaryEl = document.getElementById('scStockSummary');
     if (summaryEl) {
