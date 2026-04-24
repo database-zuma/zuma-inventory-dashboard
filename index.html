@@ -973,9 +973,13 @@ html, body {
       <label class="filter-label" for="gfVersion">Ver</label>
       <select id="gfVersion" class="filter-select" onchange="gfOnChange('version')"><option value="">Semua</option></select>
     </div>
-    <div class="filter-group flex">
+    <div class="filter-group flex" style="position:relative;">
       <label class="filter-label" for="gfSearch">Search SKU</label>
-      <input type="text" id="gfSearch" class="filter-input" placeholder="Kode / kode kecil / nama" oninput="gfOnChange('search')">
+      <input type="text" id="gfSearch" class="filter-input" placeholder="Kode / kode kecil / nama" autocomplete="off"
+        oninput="gfOnSearchInput(this.value)"
+        onkeydown="if(event.key==='Enter'){ gfHideAutocomplete(); gfRunSearch(); }"
+        onblur="setTimeout(gfHideAutocomplete, 180)">
+      <div id="gfAutocomplete" class="autocomplete" hidden style="position:absolute;top:100%;left:0;right:0;z-index:100;"></div>
     </div>
     <button class="btn-reset" onclick="gfReset()" title="Reset semua filter">Reset</button>
   </div>
@@ -1274,18 +1278,10 @@ html, body {
 
 
 <section class="tab-content" data-tab="skusearch">
-<div class="filter-bar">
-    <div class="search-wrap">
-      <input type="text" id="skuInput" class="search-input"
-        placeholder="Cari SKU · Kode Kecil · Nama Barang (min. 2 karakter)"
-        autocomplete="off"
-        oninput="onSkuInput(this.value)"
-        onkeydown="if(event.key==='Enter'){ hideAutocomplete(); runSearch(); }"
-        onblur="setTimeout(hideAutocomplete, 180)">
-      <div id="skuAutocomplete" class="autocomplete" hidden></div>
-    </div>
-    <button class="btn btn-primary" onclick="hideAutocomplete(); runSearch()">Search</button>
-    <button class="btn" onclick="clearSearch()">Clear</button>
+  <!-- Standalone search bar hidden — uses global filter Search SKU. Stubs kept so JS can set values. -->
+  <div class="filter-bar" style="display:none;">
+    <input type="text" id="skuInput" value="">
+    <div id="skuAutocomplete" hidden></div>
   </div>
 
   <div id="skuSummary" hidden></div>
@@ -3057,6 +3053,88 @@ function selectSuggestion(kode) {
     if (input) input.value = kode;
     hideAutocomplete();
     runSearch();
+}
+
+// === GLOBAL SEARCH: mirror onSkuInput / showAutocomplete for the gfSearch box ===
+var _gfAcTimer;
+function gfOnSearchInput(val) {
+    // Always keep gf.search in sync so other tabs still filter live
+    gf.search = val || '';
+    gfDispatchToActiveTab();
+    clearTimeout(_gfAcTimer);
+    var q = (val || '').trim().toLowerCase();
+    if (q.length < 3) { gfHideAutocomplete(); return; }
+    _gfAcTimer = setTimeout(function() { gfShowAutocomplete(q); }, 220);
+}
+
+function gfHideAutocomplete() {
+    var dd = document.getElementById('gfAutocomplete');
+    if (dd) { dd.hidden = true; dd.innerHTML = ''; }
+}
+
+function gfShowAutocomplete(query) {
+    var dd = document.getElementById('gfAutocomplete');
+    if (!dd) return;
+    var seen = {}, suggestions = [];
+    var maxSugg = 15;
+    function addItem(item) {
+        if (suggestions.length >= maxSugg) return;
+        var kk = (item.kode_kecil || '').toLowerCase();
+        var sku = (item.sku || '').toLowerCase();
+        var name = (item.name || '').toLowerCase();
+        var kode = (item.kode || '').toLowerCase();
+        if (kk.indexOf(query) < 0 && sku.indexOf(query) < 0 && name.indexOf(query) < 0 && kode.indexOf(query) < 0) return;
+        var key = (item.kode_kecil || item.sku || '').toLowerCase();
+        if (seen[key]) return;
+        seen[key] = true;
+        suggestions.push({ kode_kecil: item.kode_kecil || '', kode: item.kode || '', name: item.name || '', size: item.size || '', series: item.series || '' });
+    }
+    var entities = ['DDD','LJBB','MBB','UBB'];
+    for (var ei = 0; ei < entities.length && suggestions.length < maxSugg; ei++) {
+        var ent = entities[ei]; if (!allData[ent]) continue;
+        var types = ['warehouse','retail'];
+        for (var ti = 0; ti < types.length && suggestions.length < maxSugg; ti++) {
+            var items = allData[ent][types[ti]]; if (!items) continue;
+            for (var ii = 0; ii < items.length && suggestions.length < maxSugg; ii++) addItem(items[ii]);
+        }
+    }
+    if (consignmentStockData && consignmentStockData.data) {
+        for (var ci = 0; ci < consignmentStockData.data.length && suggestions.length < maxSugg; ci++) addItem(consignmentStockData.data[ci]);
+    }
+    if (suggestions.length === 0) { dd.hidden = true; return; }
+    function highlight(text) {
+        var t = String(text);
+        var idx = t.toLowerCase().indexOf(query);
+        if (idx === -1) return escHtml(t);
+        return escHtml(t.substring(0, idx)) + '<span class="ac-hi">' + escHtml(t.substring(idx, idx+query.length)) + '</span>' + escHtml(t.substring(idx+query.length));
+    }
+    var h = suggestions.map(function(s) {
+        var displayKode = (s.kode_kecil || s.kode || '').toUpperCase();
+        return '<div class="ac-item" onmousedown="gfSelectSuggestion(\'' + displayKode.replace(/\'/g,"\\'") + '\')">' +
+            '<div class="ac-code">' + highlight(displayKode) + '</div>' +
+            '<div class="ac-name">' + highlight(s.name) + '</div>' +
+            '<div class="ac-meta">' + escHtml(s.series || '') + (s.size ? ' · Size ' + escHtml(s.size) : '') + '</div>' +
+            '</div>';
+    }).join('');
+    dd.innerHTML = h;
+    dd.hidden = false;
+}
+
+function gfSelectSuggestion(kode) {
+    var input = document.getElementById('gfSearch');
+    if (input) input.value = kode;
+    gf.search = kode;
+    gfHideAutocomplete();
+    // Jump to SKU Search tab and run the detailed search
+    gfRunSearch();
+}
+
+function gfRunSearch() {
+    // Switch to skusearch tab + populate its input + run its full-detail search
+    if (typeof switchHubTab === 'function') switchHubTab('skusearch');
+    var skuInp = document.getElementById('skuInput');
+    if (skuInp) skuInp.value = gf.search || '';
+    if (typeof runSearch === 'function') runSearch();
 }
 
 // === SEARCH ===
