@@ -986,14 +986,14 @@ html, body {
 
   <!-- TAB NAV -->
   <nav class="tab-nav" id="tabNav">
-    <button class="tab-btn active" data-tab="inventory">Stock</button>
-    <button class="tab-btn" data-tab="stockcontrol">Stock Control</button>
+    <button class="tab-btn" data-tab="inventory">Stock</button>
+    <button class="tab-btn active" data-tab="stockcontrol">Stock Control</button>
     <button class="tab-btn" data-tab="maxstock">Max Stock</button>
     <button class="tab-btn" data-tab="skusearch" style="display:none;">SKU Search</button>
     <button class="tab-btn" data-tab="summaryreport">Summary Report</button>
   </nav>
 
-<section class="tab-content active" data-tab="inventory">
+<section class="tab-content" data-tab="inventory">
 
   <!-- Sub-tab nav: Summary vs Per Area -->
   <div class="tab-nav" style="margin-bottom:10px;">
@@ -1091,7 +1091,7 @@ html, body {
   </div>
 
 </section>
-<section class="tab-content" data-tab="stockcontrol">
+<section class="tab-content active" data-tab="stockcontrol">
 
   <!-- Sub-tab Toggle: Retail vs Online -->
   <div style="display:flex;gap:8px;margin-bottom:14px;border-bottom:2px solid var(--border);padding-bottom:0;">
@@ -1334,7 +1334,7 @@ async function fetchAPI(path) {
     return res.json();
 }
 
-var activeTab = 'inventory';
+var activeTab = 'stockcontrol'; // default landing — hash like #inventory still overrides via DOMContentLoaded
 
 function fmt(n) { return Number(n || 0).toLocaleString('id-ID'); }
 function formatNum(n) { return fmt(n); }
