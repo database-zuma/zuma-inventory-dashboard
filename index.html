@@ -3987,7 +3987,7 @@ function invRender() {
         kpi.innerHTML =
             '<div class="kpi-card kpi-primary"><div class="kpi-label">Total SKU</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular">' + fmt(totalSku) + '</span></span></div><div class="kpi-sub">' + esc(ent) + ' · ' + esc(invCurrentType) + '</div></div>' +
             '<div class="kpi-card"><div class="kpi-label">Total Stock</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular">' + fmt(totalStock) + '</span></span></div><div class="kpi-sub">pairs gabungan</div></div>' +
-            '<div class="kpi-card"><div class="kpi-label">Minus on Hand</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular" style="color:' + (negCount > 0 ? '#ef4444' : 'inherit') + ';">' + fmt(negCount) + '</span></span></div><div class="kpi-sub">SKU dengan stock &lt; 0</div></div>' +
+            '<div class="kpi-card" ' + (negCount > 0 ? 'onclick="showMinusDetail()" style="cursor:pointer;" title="Klik untuk lihat detail lokasi stok minus"' : '') + '><div class="kpi-label">Minus on Hand</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular" style="color:' + (negCount > 0 ? '#ef4444' : 'inherit') + ';">' + fmt(negCount) + '</span></span></div><div class="kpi-sub">' + (negCount > 0 ? '🔍 Klik untuk detail' : 'SKU dengan stock < 0') + '</div></div>' +
             '<div class="kpi-card"><div class="kpi-label">Total ' + storeLabel + '</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular">' + fmt(totalStores) + '</span></span></div><div class="kpi-sub">jumlah ' + storeLabel.toLowerCase() + ' aktif (stok ≠ 0)</div></div>';
     }
 
@@ -4039,6 +4039,127 @@ function invPrev() { if (invCurrentPage > 1) { invCurrentPage--; invRender(); } 
 function invNext() { invCurrentPage++; invRender(); }
 
 // Route the Stock tab export button to the right per-entity/channel Excel export
+// === Minus on Hand detail modal ===
+function buildMinusOnHandRows() {
+    // Rebuild negative per-(SKU, store) rows honoring current filters on Stock Summary
+    var items = (typeof invGetSourceItems === 'function') ? invGetSourceItems() : [];
+    var _gf = (typeof gf !== 'undefined' && gf) ? gf : {};
+    var q = (_gf.search || '').toLowerCase().trim();
+    var store = _gf.store || '';
+    var tier = _gf.tier || '';
+    var gender = _gf.gender || '';
+    var series = _gf.series || '';
+    var version = _gf.version || '';
+    var normVer = typeof _normalizeVersion === 'function' ? _normalizeVersion : function(v){return v || '';};
+
+    var rows = [];
+    items.forEach(function(it) {
+        if (tier && String(it.tier) !== tier) return;
+        if (gender && it.gender !== gender) return;
+        if (series && it.series !== series) return;
+        if (version && String(normVer(it.version)) !== version) return;
+        if (q) {
+            var hay = (String(it.kode || '') + '|' + String(it.kode_kecil || '') + '|' + String(it.name || '')).toLowerCase();
+            if (hay.indexOf(q) < 0) return;
+        }
+        var ss = it.store_stock || {};
+        Object.keys(ss).forEach(function(s) {
+            if (store && s !== store) return;
+            var v = Number(ss[s]) || 0;
+            if (v >= 0) return;
+            rows.push({
+                kode: (it.kode || '').toUpperCase(),
+                kode_kecil: (it.kode_kecil || '').toUpperCase(),
+                name: it.name || '',
+                size: it.size || '',
+                tier: it.tier || '',
+                gender: it.gender || '',
+                store: s,
+                area: (typeof getAreaFromStore === 'function') ? getAreaFromStore(s) : '',
+                stock: v
+            });
+        });
+    });
+    rows.sort(function(a,b){ return a.stock - b.stock; }); // most negative first
+    return rows;
+}
+
+function showMinusDetail() {
+    var rows = buildMinusOnHandRows();
+    var modal = document.getElementById('minusDetailModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'minusDetailModal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,42,58,0.55);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px;';
+        modal.innerHTML = '<div style="background:var(--card);max-width:1100px;width:100%;max-height:82vh;border-radius:var(--radius);box-shadow:0 10px 40px rgba(0,0,0,0.2);display:flex;flex-direction:column;overflow:hidden;">' +
+            '<div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--navy);color:#fff;">' +
+            '<div style="font-size:11px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;">🔴 Minus on Hand — Detail Lokasi</div>' +
+            '<button onclick="closeMinusDetail()" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;padding:4px 10px;">✕</button>' +
+            '</div>' +
+            '<div id="minusModalBody" style="flex:1;overflow:auto;padding:0;"></div>' +
+            '<div style="padding:8px 14px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">' +
+            '<div id="minusModalMeta" style="font-size:11px;color:var(--fg-soft);">—</div>' +
+            '<button class="btn btn-primary" onclick="exportMinusDetailCSV()">📥 Export CSV</button>' +
+            '</div></div>';
+        document.body.appendChild(modal);
+        modal.addEventListener('click', function(e) { if (e.target === modal) closeMinusDetail(); });
+    }
+    modal.style.display = 'flex';
+    modal._rows = rows;
+
+    var totalNeg = rows.reduce(function(s,r){ return s + r.stock; }, 0);
+    var uniqSku = {}; rows.forEach(function(r){ uniqSku[r.kode_kecil] = true; });
+    var meta = document.getElementById('minusModalMeta');
+    if (meta) meta.textContent = fmt(rows.length) + ' baris · ' + fmt(Object.keys(uniqSku).length) + ' SKU unik · ' + fmt(totalNeg) + ' pairs minus';
+
+    var body = document.getElementById('minusModalBody');
+    if (body) {
+        if (!rows.length) {
+            body.innerHTML = '<div style="padding:40px;text-align:center;color:var(--fg-soft);">Tidak ada stok minus dengan filter aktif saat ini.</div>';
+        } else {
+            var html = '<table class="data" style="width:100%;">' +
+                '<thead><tr><th>Kode Barang</th><th>Kode Kecil</th><th>Nama</th><th class="center">Size</th><th class="center">Tier</th><th class="center">Gender</th><th>Lokasi</th><th class="center">Area</th><th class="center">Stock</th></tr></thead><tbody>';
+            rows.forEach(function(r) {
+                html += '<tr>' +
+                    '<td style="font-family:ui-monospace,monospace;font-size:11px;">' + esc(r.kode_kecil) + '</td>' +
+                    '<td style="font-family:ui-monospace,monospace;font-size:11px;">' + esc(r.kode) + '</td>' +
+                    '<td>' + esc(r.name) + '</td>' +
+                    '<td class="center">' + esc(r.size || '—') + '</td>' +
+                    '<td class="center">' + esc(r.tier || '—') + '</td>' +
+                    '<td class="center">' + esc(r.gender || '—') + '</td>' +
+                    '<td>' + esc(r.store) + '</td>' +
+                    '<td class="center">' + esc(r.area || '—') + '</td>' +
+                    '<td class="center" style="color:#ef4444;font-weight:700;font-variant-numeric:tabular-nums;">' + fmt(r.stock) + '</td>' +
+                    '</tr>';
+            });
+            html += '</tbody></table>';
+            body.innerHTML = html;
+        }
+    }
+}
+
+function closeMinusDetail() {
+    var m = document.getElementById('minusDetailModal');
+    if (m) m.style.display = 'none';
+}
+
+function exportMinusDetailCSV() {
+    var m = document.getElementById('minusDetailModal');
+    var rows = (m && m._rows) || [];
+    if (!rows.length) { alert('Tidak ada data'); return; }
+    var headers = ['Kode Barang','Kode Kecil','Nama','Size','Tier','Gender','Lokasi','Area','Stock'];
+    function escv(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
+    var out = [headers.map(escv).join(',')];
+    rows.forEach(function(r) {
+        out.push([r.kode_kecil, r.kode, r.name, r.size, r.tier, r.gender, r.store, r.area, r.stock].map(escv).join(','));
+    });
+    var blob = new Blob(['﻿' + out.join('\n')], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'minus_on_hand_' + new Date().toISOString().slice(0,10) + '.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
 function invExportContextual() {
     var ent = (typeof currentEntity !== 'undefined' && currentEntity) ? currentEntity : 'DDD';
     var ch  = String((typeof gf !== 'undefined' && gf && gf.channel) || 'retail').toLowerCase();
