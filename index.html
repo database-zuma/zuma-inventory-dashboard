@@ -1114,7 +1114,7 @@ html, body {
 
   <!-- View Mode Toggle -->
   <div style="display:flex;gap:8px;margin-bottom:10px;">
-    <button id="scViewSku" class="btn" onclick="scSwitchView('sku')" style="padding:6px 14px;font-size:12px;">Analysis By SKU</button>
+    <button id="scViewSku" class="btn" onclick="scSwitchView('sku')" style="padding:6px 14px;font-size:12px;">Analysis By Kode Barang</button>
     <button id="scViewKK" class="btn btn-primary" onclick="scSwitchView('kodeKecil')" style="padding:6px 14px;font-size:12px;">Analysis By Kode Kecil</button>
   </div>
 
@@ -1185,7 +1185,7 @@ html, body {
 
     <!-- View Mode Toggle -->
     <div style="display:flex;gap:8px;margin-bottom:10px;">
-      <button id="scoViewSku" class="btn" onclick="scoSwitchView('sku')" style="padding:6px 14px;font-size:12px;">Analysis By SKU</button>
+      <button id="scoViewSku" class="btn" onclick="scoSwitchView('sku')" style="padding:6px 14px;font-size:12px;">Analysis By Kode Barang</button>
       <button id="scoViewKK" class="btn btn-primary" onclick="scoSwitchView('kodeKecil')" style="padding:6px 14px;font-size:12px;">Analysis By Kode Kecil</button>
     </div>
 
@@ -3996,7 +3996,7 @@ var scViewMode = 'kodeKecil'; // 'sku' or 'kodeKecil'
 function scUpdateTitle() {
     var el = document.getElementById('scTableTitle'); if (!el) return;
     var base = 'Control Stock ' + (scCurrentType === 'online' ? 'Online' : 'Retail');
-    el.textContent = base + ' — Per ' + (scViewMode === 'sku' ? 'SKU' : 'Kode Kecil');
+    el.textContent = base + ' — Per ' + (scViewMode === 'sku' ? 'Kode Barang' : 'Kode Kecil');
 }
 
 function scSwitchView(mode) {
@@ -4483,7 +4483,7 @@ function scoSwitchView(mode) {
     if (btnSku) btnSku.classList.toggle('btn-primary', mode === 'sku');
     if (btnKK) btnKK.classList.toggle('btn-primary', mode === 'kodeKecil');
     var title = document.getElementById('scoTableTitle');
-    if (title) title.textContent = 'Control Stock Online — Per ' + (mode === 'sku' ? 'SKU' : 'Kode Kecil');
+    if (title) title.textContent = 'Control Stock Online — Per ' + (mode === 'sku' ? 'Kode Barang' : 'Kode Kecil');
     scoRender();
 }
 
