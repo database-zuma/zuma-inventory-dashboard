@@ -963,160 +963,16 @@ html, body {
   .grid-2 { grid-template-columns: 1fr !important; }
 }
 
-/* ======= SKELETON LOADER (overrides centered spinner overlay) ======= */
-#api-loading-overlay {
-  display: block;
-  background: var(--bg);
-  overflow: auto;
-  align-items: stretch;
-  justify-content: flex-start;
-  padding: 0;
-}
-.skel-progress {
-  position: fixed; top: 0; left: 0; right: 0;
-  height: 3px; background: var(--border);
-  z-index: 110; overflow: hidden;
-}
-#api-loading-overlay #loadingProgressBar {
-  width: 0%; height: 100%;
-  background: linear-gradient(90deg, var(--navy), var(--accent));
-  border-radius: 0; margin-top: 0;
-  transition: width 0.4s ease;
-}
-.skel-shell {
-  max-width: 100%;
-  padding: 20px;
-  display: flex; flex-direction: column; gap: 10px;
-}
-.skel {
-  background: linear-gradient(90deg, #eef0f3 0%, #f7f8fa 50%, #eef0f3 100%);
-  background-size: 200% 100%;
-  animation: skel-shimmer 1.4s ease-in-out infinite;
-  border-radius: 6px; display: block;
-}
-@keyframes skel-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-.skel-header {
-  display: flex; justify-content: space-between; align-items: center;
-  background: var(--card); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 14px 18px;
-  box-shadow: var(--shadow-sm); gap: 14px; flex-wrap: wrap;
-}
-.skel-brand-mark { width: 34px; height: 34px; border-radius: 8px; flex-shrink: 0; }
-.skel-filter {
-  background: var(--card); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 10px 12px;
-  display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;
-  box-shadow: var(--shadow-sm);
-}
-.skel-select { width: 92px; height: 30px; border-radius: 6px; }
-.skel-tabnav {
-  display: flex; gap: 4px;
-  background: var(--card); border: 1px solid var(--border);
-  padding: 5px; border-radius: var(--radius); width: fit-content;
-  box-shadow: var(--shadow-sm);
-}
-.skel-tab { width: 96px; height: 26px; border-radius: 999px; }
-.skel-card {
-  background: var(--card); border: 1px solid var(--border);
-  border-radius: var(--radius); box-shadow: var(--shadow-sm);
-  overflow: hidden;
-}
-.skel-card-header {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 14px 18px; border-bottom: 1px solid var(--border-soft);
-  gap: 14px; flex-wrap: wrap;
-}
-.skel-table { padding: 8px 18px 18px; }
-.skel-row { height: 26px; margin: 10px 0; border-radius: 4px; }
-.skel-status-pill {
-  position: fixed; bottom: 18px; right: 18px;
-  display: flex; align-items: center; gap: 8px;
-  background: var(--navy); color: #fff;
-  padding: 8px 14px; border-radius: 999px;
-  font-size: 11.5px; font-weight: 500; letter-spacing: 0.01em;
-  box-shadow: var(--shadow-md); z-index: 110;
-}
-.skel-status-pill #loadingPercent {
-  color: var(--accent); font-weight: 700;
-  font-variant-numeric: tabular-nums; margin: 0;
-}
-.skel-status-pill #loadingStatus { color: #fff; margin: 0; }
-
-@media (max-width: 1024px) {
-  .skel-select { width: calc(50% - 5px); }
-}
-@media (max-width: 640px) {
-  .skel-shell { padding: 12px; }
-  .skel-select { width: 100%; }
-  .skel-table { padding: 6px 12px 12px; }
-}
-
 </style>
 </head>
 <body>
 
 <div id="api-loading-overlay">
-  <div class="skel-progress"><div id="loadingProgressBar"></div></div>
-  <div class="skel-shell">
-    <div class="skel-header">
-      <div style="display:flex;align-items:center;gap:12px;">
-        <div class="skel skel-brand-mark"></div>
-        <div>
-          <div class="skel" style="width:220px;height:14px;margin-bottom:6px;"></div>
-          <div class="skel" style="width:280px;height:10px;"></div>
-        </div>
-      </div>
-      <div style="display:flex;gap:10px;align-items:center;">
-        <div class="skel" style="width:80px;height:26px;border-radius:8px;"></div>
-        <div class="skel" style="width:140px;height:24px;border-radius:999px;"></div>
-      </div>
-    </div>
-    <div class="skel-filter">
-      <div class="skel skel-select"></div>
-      <div class="skel skel-select"></div>
-      <div class="skel skel-select"></div>
-      <div class="skel skel-select"></div>
-      <div class="skel skel-select"></div>
-      <div class="skel skel-select"></div>
-      <div class="skel skel-select"></div>
-      <div class="skel skel-select"></div>
-      <div class="skel skel-select" style="flex:1;min-width:220px;"></div>
-      <div class="skel" style="width:64px;height:30px;border-radius:6px;align-self:flex-end;"></div>
-    </div>
-    <div class="skel-tabnav">
-      <div class="skel skel-tab"></div>
-      <div class="skel skel-tab" style="background:linear-gradient(90deg,#001f2c,#003c53);opacity:0.85;"></div>
-      <div class="skel skel-tab"></div>
-    </div>
-    <div class="skel-card">
-      <div class="skel-card-header">
-        <div style="display:flex;gap:14px;align-items:center;">
-          <div class="skel" style="width:160px;height:13px;"></div>
-          <div class="skel" style="width:100px;height:10px;"></div>
-        </div>
-        <div class="skel" style="width:140px;height:30px;border-radius:6px;"></div>
-      </div>
-      <div class="skel-table">
-        <div class="skel skel-row" style="width:96%;"></div>
-        <div class="skel skel-row" style="width:99%;"></div>
-        <div class="skel skel-row" style="width:92%;"></div>
-        <div class="skel skel-row" style="width:97%;"></div>
-        <div class="skel skel-row" style="width:94%;"></div>
-        <div class="skel skel-row" style="width:98%;"></div>
-        <div class="skel skel-row" style="width:90%;"></div>
-        <div class="skel skel-row" style="width:96%;"></div>
-        <div class="skel skel-row" style="width:93%;"></div>
-        <div class="skel skel-row" style="width:97%;"></div>
-      </div>
-    </div>
-  </div>
-  <div class="skel-status-pill">
-    <span id="loadingPercent">0%</span>
-    <span id="loadingStatus">Menghubungi server…</span>
-  </div>
+  <div class="spinner"></div>
+  <div style="font-weight:600;font-size:12px;color:var(--fg);">Memuat data</div>
+  <div id="loadingProgressWrap"><div id="loadingProgressBar"></div></div>
+  <div id="loadingStatus">Menghubungi server…</div>
+  <div id="loadingPercent">0%</div>
 </div>
 
 <div class="top-strip"></div>
@@ -1604,7 +1460,7 @@ var _rdDataLoaded = false;
 
 async function loadAllData() {
     const overlay = document.getElementById('api-loading-overlay');
-    if (overlay) overlay.style.display = 'block';
+    if (overlay) overlay.style.display = 'flex';
 
     // Critical path: 2 endpoints (stock + store-areas). Max-stock, assortment, consignment, sales = lazy.
     var total = 2, done = 0;
@@ -1737,7 +1593,7 @@ function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replac
 
 async function loadData() {
     const overlay = document.getElementById('api-loading-overlay');
-    if (overlay) overlay.style.display = 'block';
+    if (overlay) overlay.style.display = 'flex';
     var total = 3, done = 0;
     function progress(label){ done++; var pct=Math.round((done/total)*100); var b=document.getElementById('loadingProgressBar'); var p=document.getElementById('loadingPercent'); var s=document.getElementById('loadingStatus'); if(b)b.style.width=pct+'%'; if(p)p.textContent=pct+'%'; if(s)s.textContent=label; }
     function trackFetch(u,l,f){ return fetchAPI(u).then(d=>{progress(l);return d;}).catch(()=>{progress(l);return f;}); }
@@ -2172,7 +2028,7 @@ function esc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replac
 
 async function loadData() {
     const overlay = document.getElementById('api-loading-overlay');
-    if (overlay) overlay.style.display = 'block';
+    if (overlay) overlay.style.display = 'flex';
     var total = 2, done = 0;
     function progress(label) {
         done++;
@@ -2560,7 +2416,7 @@ var currentEntity = 'DDD';
 
 async function loadDashboardData() {
     const loadingEl = document.getElementById('api-loading-overlay');
-    if (loadingEl) loadingEl.style.display = 'block';
+    if (loadingEl) loadingEl.style.display = 'flex';
     var _total = 3, _done = 0;
     function progress(label) {
         _done++;
@@ -3093,7 +2949,7 @@ var storeAreaMap = {};
 
 async function loadDashboardData() {
     const overlay = document.getElementById('api-loading-overlay');
-    if (overlay) overlay.style.display = 'block';
+    if (overlay) overlay.style.display = 'flex';
     var total = 3, done = 0;
     function progress(label) {
         done++;
@@ -3598,7 +3454,7 @@ var assortmentMap = {};
 
 async function loadData() {
     const overlay = document.getElementById('api-loading-overlay');
-    if (overlay) overlay.style.display = 'block';
+    if (overlay) overlay.style.display = 'flex';
     var total = 4, done = 0;
     function progress(label) {
         done++;
