@@ -1305,26 +1305,20 @@ html, body {
 
   <!-- Color legend -->
   <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:10.5px;color:var(--fg-soft);margin-bottom:8px;align-items:center;">
-    <span><span style="display:inline-block;width:14px;height:14px;background:#fee2e2;border:1px solid #fca5a5;vertical-align:middle;margin-right:5px;border-radius:3px;"></span>Kurang dari assortment</span>
-    <span><span style="display:inline-block;width:14px;height:14px;background:#dcfce7;border:1px solid #86efac;vertical-align:middle;margin-right:5px;border-radius:3px;"></span>Sesuai (1 box)</span>
-    <span><span style="display:inline-block;width:14px;height:14px;background:#fef3c7;border:1px solid #fcd34d;vertical-align:middle;margin-right:5px;border-radius:3px;"></span>Lebih dari 1 box</span>
-    <span><span style="display:inline-block;width:14px;height:14px;background:#f1f5f9;border:1px solid #e5e7eb;vertical-align:middle;margin-right:5px;border-radius:3px;"></span>Kosong (tidak distock)</span>
-    <span style="margin-left:auto;color:var(--fg-muted);">Hanya tier <strong>1, 2, 3, 8</strong> · Bandingkan dengan 1 box assortment per artikel</span>
+    <span><span style="display:inline-block;width:14px;height:14px;background:#fee2e2;border:1px solid #fca5a5;vertical-align:middle;margin-right:5px;border-radius:3px;"></span>Kurang dari assortment (perlu replenishment)</span>
+    <span><span style="display:inline-block;width:14px;height:14px;background:#dcfce7;border:1px solid #86efac;vertical-align:middle;margin-right:5px;border-radius:3px;"></span>Pas dengan assortment</span>
+    <span style="margin-left:auto;color:var(--fg-muted);">Hanya tier <strong>1, 2, 3, 8</strong> · Hanya tampil artikel yang punya minimal 1 size kurang · Over-stock tidak ditampilkan</span>
   </div>
 
   <!-- TABLE CARD -->
   <div class="card">
     <div class="card-header">
       <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
-        <div class="card-title">Alert Stok per Kode Barang</div>
+        <div class="card-title">Alert Stok — Toko × Kode Barang</div>
         <div class="card-meta" id="saCountInfo">—</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
-        <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--fg-soft);cursor:pointer;">
-          <input type="checkbox" id="saHideOk" checked onchange="saRender()" style="cursor:pointer;">
-          Sembunyikan baris semua-OK
-        </label>
-        <button class="btn btn-primary" onclick="saExport()" title="Export Excel daftar SKU yang kurang dari assortment">
+        <button class="btn btn-primary" onclick="saExport()" title="Export Excel">
           <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>
           Export Excel
         </button>
@@ -3164,97 +3158,157 @@ function saInit() {
     _saEnsureAssortment().then(saRender);
 }
 
-// Build per-store breakdown for tier 1/2/3/8 SKUs only.
-// Output rows: { kode_besar, kode, name, size, tier, gender, series, expected, stores: {storeName: qty}, total }
+// Map selected area → label for "local WH" column
+function _saLocalWhLabel(area) {
+    if (!area) return null;
+    if (area === 'Bali') return 'Stok WH Bali';
+    if (area === 'Jakarta') return 'Stok WH Jakarta';
+    if (area === 'Sumatera') return 'Stok WH Sumatera';
+    if (area === 'Batam') return 'Stok WH Batam';
+    if (area === 'Sulawesi') return 'Stok WH Sulawesi';
+    // Jatim has no local WH separate from Pusat → handled via WHS column only
+    return null;
+}
+
+// True if WH name is the central Pusat / Surabaya warehouse
+function _saIsPusat(whName) {
+    var n = String(whName || '').toLowerCase();
+    if (n.indexOf('online') !== -1) return false;
+    return n.indexOf('pusat') !== -1;
+}
+// True if WH belongs to area's "local" pool (excludes Pusat)
+function _saIsLocalWh(whName, area) {
+    if (!area || _saIsPusat(whName)) return false;
+    var n = String(whName || '').toLowerCase();
+    if (n.indexOf('online') !== -1) return false;
+    if (typeof sbaWhToArea === 'function') {
+        return sbaWhToArea(whName) === area;
+    }
+    return false;
+}
+
+// Build flat rows: one row per (toko, kode_besar) for tier 1/2/3/8 articles
+// where the article has at least one under-stock size at that store, and the
+// row itself is under-or-match (over-stock rows hidden).
 function saBuildRows() {
     var entity = currentEntity;
     var entData = (allData || {})[entity] || {};
     var retItems = entData.retail || [];
+    var whItems  = entData.warehouse || [];
     var consigItems = (consignmentStockItems || []).filter(function(it){
         return String(it.entity || '').toUpperCase() === String(entity).toUpperCase();
     });
     var areaMap = storeAreaMap || {};
-    var areaSel = (gf && gf.area) ? gf.area : '';     // global filter Area (zone like 'Bali')
-    var storeSel = (gf && gf.store) ? gf.store : '';  // single store filter
-    var byKB = {};
+    var areaSel = (gf && gf.area) ? gf.area : '';
+    var storeSel = (gf && gf.store) ? gf.store : '';
 
-    function process(items, kindLabel) {
+    // Step 1: index WH stocks per kode_besar → { local: N, pusat: N }
+    var whStocks = {};
+    whItems.forEach(function(it) {
+        var kbUpper = String(it.kode_kecil || '').toUpperCase();
+        if (!kbUpper || !assortmentDetailMap[kbUpper]) return;
+        var ss = it.store_stock || {};
+        Object.keys(ss).forEach(function(wh) {
+            var qty = Number(ss[wh]) || 0;
+            if (!qty) return;
+            if (!whStocks[kbUpper]) whStocks[kbUpper] = { local: 0, pusat: 0 };
+            if (_saIsPusat(wh)) {
+                whStocks[kbUpper].pusat += qty;
+            } else if (areaSel && _saIsLocalWh(wh, areaSel)) {
+                whStocks[kbUpper].local += qty;
+            }
+        });
+    });
+
+    // Step 2: index toko stocks per (store, kode_besar)
+    var tokoStocks = {};   // tokoStocks[storeName][kbUpper] = qty
+    var tokoKeep = {};     // names of stores that pass area/store filter
+    function addTokoStock(items) {
         items.forEach(function(it) {
             var kbUpper = String(it.kode_kecil || '').toUpperCase();
             if (!kbUpper) return;
             var aDef = assortmentDetailMap[kbUpper];
-            if (!aDef) return; // not tier 1/2/3/8 → skip
+            if (!aDef) return;
             var ss = it.store_stock || {};
             Object.keys(ss).forEach(function(st) {
                 var ma = areaMap[String(st).toLowerCase()];
-                if (!ma) return; // unmapped store
+                if (!ma) return;
                 if (areaSel) {
                     var zone = (typeof sbaStoreMapArea === 'function') ? sbaStoreMapArea(ma) : ma;
                     if (zone !== areaSel) return;
                 }
                 if (storeSel && String(st).toLowerCase() !== String(storeSel).toLowerCase()) return;
                 var qty = Number(ss[st]) || 0;
-                if (!byKB[kbUpper]) {
-                    byKB[kbUpper] = {
-                        kode_besar: kbUpper,
-                        kode: aDef.k || '',
-                        article: aDef.a || it.name || '',
-                        size: aDef.s || it.size || '',
-                        tier: aDef.t || '',
-                        gender: aDef.g || it.gender || '',
-                        series: aDef.sr || it.series || '',
-                        expected: Number(aDef.e) || 0,
-                        stores: {},
-                        total: 0,
-                    };
-                }
-                byKB[kbUpper].stores[st] = (byKB[kbUpper].stores[st] || 0) + qty;
-                byKB[kbUpper].total += qty;
+                if (!tokoStocks[st]) tokoStocks[st] = {};
+                tokoStocks[st][kbUpper] = (tokoStocks[st][kbUpper] || 0) + qty;
+                tokoKeep[st] = true;
             });
         });
     }
-    process(retItems, 'retail');
-    process(consigItems, 'consig');
+    addTokoStock(retItems);
+    addTokoStock(consigItems);
 
-    // Apply global Tier/Gender/Series/Search filters
-    var rows = Object.keys(byKB).map(function(k){ return byKB[k]; });
+    // Step 3: per (store × article kode), check if any size is under-stock
+    // If yes: emit rows for sizes where actual <= expected (under + match)
+    // If no:  skip the entire article at this store
+    var rows = [];
+    Object.keys(tokoStocks).forEach(function(store) {
+        var byArticle = {};
+        Object.keys(tokoStocks[store]).forEach(function(kb) {
+            var aDef = assortmentDetailMap[kb];
+            if (!aDef) return;
+            var artKey = aDef.k || 'UNK';
+            if (!byArticle[artKey]) byArticle[artKey] = [];
+            byArticle[artKey].push({ kb: kb, def: aDef, actual: tokoStocks[store][kb] });
+        });
+        Object.keys(byArticle).forEach(function(artKey) {
+            var sizes = byArticle[artKey];
+            var hasUnder = sizes.some(function(s){ return s.actual < s.def.e; });
+            if (!hasUnder) return; // article fully OK at this store
+            sizes.forEach(function(s) {
+                if (s.actual > s.def.e) return; // hide over-stock
+                var wh = whStocks[s.kb] || { local: 0, pusat: 0 };
+                rows.push({
+                    toko: store,
+                    kode_besar: s.kb,
+                    article: s.def.a || '',
+                    size: s.def.s || '',
+                    tier: s.def.t || '',
+                    gender: s.def.g || '',
+                    series: s.def.sr || '',
+                    expected: s.def.e,
+                    actual: s.actual,
+                    wh_local: wh.local,
+                    wh_pusat: wh.pusat,
+                    is_under: s.actual < s.def.e,
+                });
+            });
+        });
+    });
+
+    // Apply remaining global filters (tier/gender/series/search)
     if (gf) {
-        if (gf.tier)    rows = rows.filter(function(r){ return String(r.tier) === String(gf.tier); });
-        if (gf.gender)  rows = rows.filter(function(r){ return String(r.gender).toLowerCase() === String(gf.gender).toLowerCase(); });
-        if (gf.series)  rows = rows.filter(function(r){ return String(r.series).toLowerCase() === String(gf.series).toLowerCase(); });
-        if (gf.search)  {
+        if (gf.tier)   rows = rows.filter(function(r){ return String(r.tier) === String(gf.tier); });
+        if (gf.gender) rows = rows.filter(function(r){ return String(r.gender).toLowerCase() === String(gf.gender).toLowerCase(); });
+        if (gf.series) rows = rows.filter(function(r){ return String(r.series).toLowerCase() === String(gf.series).toLowerCase(); });
+        if (gf.search) {
             var q = String(gf.search).toLowerCase();
             rows = rows.filter(function(r){
                 return r.kode_besar.toLowerCase().indexOf(q) !== -1
-                    || r.kode.toLowerCase().indexOf(q) !== -1
                     || r.article.toLowerCase().indexOf(q) !== -1;
             });
         }
     }
 
-    // Sort: by article name then size
+    // Sort: toko → article → size
     rows.sort(function(a,b){
-        var ka = a.article + '|' + a.size, kb = b.article + '|' + b.size;
+        var ka = a.toko + '|' + a.article + '|' + a.size;
+        var kb = b.toko + '|' + b.article + '|' + b.size;
         return ka.localeCompare(kb);
     });
     return rows;
 }
 
-function _saStatusForCell(actual, expected) {
-    if (!actual) return 'empty';        // 0 → not stocked
-    if (actual < expected) return 'under';
-    if (actual === expected) return 'ok';
-    return 'over';
-}
-function _saCellStyle(status) {
-    switch(status) {
-        case 'under': return 'background:#fee2e2;color:#991b1b;font-weight:700;';
-        case 'ok':    return 'background:#dcfce7;color:#166534;font-weight:600;';
-        case 'over':  return 'background:#fef3c7;color:#92400e;font-weight:600;';
-        case 'empty': return 'background:#f1f5f9;color:#94a3b8;';
-    }
-    return '';
-}
 
 function saRender() {
     var thead = document.getElementById('saThead');
@@ -3272,102 +3326,78 @@ function saRender() {
     }
 
     var rows = saBuildRows();
-    var hideOk = !!(document.getElementById('saHideOk') && document.getElementById('saHideOk').checked);
+    var areaSel = (gf && gf.area) ? gf.area : '';
+    var localLabel = _saLocalWhLabel(areaSel); // null when no area or Jatim
 
-    // Collect distinct store columns (sorted)
-    var storeSet = {};
-    rows.forEach(function(r){ Object.keys(r.stores).forEach(function(s){ storeSet[s] = true; }); });
-    var storeCols = Object.keys(storeSet).sort();
-
-    // Compute per-row stats + filter
-    var totalUnder = 0;       // count of cells flagged red (deficit)
-    var totalDeficit = 0;     // total pairs short
-    var skuFlagged = {};      // distinct kode_besar with at least 1 deficit cell
-    var visibleRows = [];
-
+    // Stats
+    var underCount = 0, deficitPairs = 0, tokoSet = {}, skuSet = {};
     rows.forEach(function(r) {
-        var cellStatuses = {};
-        var rowHasUnder = false;
-        var rowHasNonOk = false;
-        storeCols.forEach(function(s) {
-            var actual = r.stores[s] || 0;
-            var status = _saStatusForCell(actual, r.expected);
-            cellStatuses[s] = status;
-            if (status === 'under') {
-                totalUnder++;
-                totalDeficit += (r.expected - actual);
-                skuFlagged[r.kode_besar] = true;
-                rowHasUnder = true;
-                rowHasNonOk = true;
-            }
-            if (status === 'over' || status === 'empty') rowHasNonOk = true;
-        });
-        r._cellStatuses = cellStatuses;
-        r._hasUnder = rowHasUnder;
-        r._hasNonOk = rowHasNonOk;
-        if (hideOk) {
-            // hide row if every visible cell is "ok" or no stores at all
-            if (rowHasUnder) visibleRows.push(r);
-        } else {
-            visibleRows.push(r);
+        tokoSet[r.toko] = true;
+        skuSet[r.kode_besar] = true;
+        if (r.is_under) {
+            underCount++;
+            deficitPairs += (r.expected - r.actual);
         }
     });
 
-    // KPI
     if (kpiEl) {
         kpiEl.innerHTML = [
-            ['SKU Tier 1/2/3/8 di area ini', rows.length],
-            ['SKU dengan deficit', Object.keys(skuFlagged).length],
-            ['Total cell kurang dari box', totalUnder],
-            ['Total pairs short (vs 1 box)', totalDeficit],
+            ['Toko ter-alert', Object.keys(tokoSet).length, false],
+            ['SKU ter-alert', Object.keys(skuSet).length, false],
+            ['Cell kurang dari assortment', underCount, true],
+            ['Total pairs short (vs 1 box)', deficitPairs, true],
         ].map(function(p){
-            var label = p[0], val = p[1];
-            var color = (label.indexOf('deficit') !== -1 || label.indexOf('kurang') !== -1 || label.indexOf('short') !== -1) ? 'var(--danger)' : 'var(--fg)';
+            var label = p[0], val = p[1], danger = p[2];
+            var color = danger ? 'var(--danger)' : 'var(--fg)';
             return '<div class="card" style="padding:14px 18px;"><div style="font-size:10px;color:var(--fg-soft);font-weight:600;letter-spacing:0.05em;text-transform:uppercase;">' + label + '</div><div style="font-size:20px;font-weight:700;color:' + color + ';margin-top:4px;font-variant-numeric:tabular-nums;">' + Number(val).toLocaleString('id-ID') + '</div></div>';
         }).join('');
     }
     if (countEl) {
-        countEl.textContent = visibleRows.length + ' / ' + rows.length + ' SKU · ' + storeCols.length + ' toko';
+        countEl.textContent = rows.length + ' baris · ' + Object.keys(tokoSet).length + ' toko · ' + Object.keys(skuSet).length + ' SKU';
     }
 
     // THEAD
     var th = '<tr style="background:var(--navy);color:#fff;">'
-        + '<th style="position:sticky;left:0;z-index:6;background:var(--navy);padding:7px 10px;text-align:left;font-weight:600;border:1px solid #001f2c;min-width:120px;">Kode Barang</th>'
-        + '<th style="padding:7px 10px;text-align:center;font-weight:600;border:1px solid #001f2c;">Tier</th>'
-        + '<th style="padding:7px 10px;text-align:left;font-weight:600;border:1px solid #001f2c;min-width:160px;">Article</th>'
-        + '<th style="padding:7px 10px;text-align:center;font-weight:600;border:1px solid #001f2c;">Size</th>'
-        + '<th style="padding:7px 10px;text-align:center;font-weight:600;border:1px solid #001f2c;background:#001f2c;">Box (1×)</th>';
-    storeCols.forEach(function(s){
-        th += '<th style="padding:7px 8px;text-align:center;font-weight:600;border:1px solid #001f2c;writing-mode:vertical-rl;transform:rotate(180deg);min-width:36px;height:90px;">' + esc(s) + '</th>';
-    });
-    th += '<th style="padding:7px 10px;text-align:center;font-weight:600;border:1px solid #001f2c;background:#001f2c;">Total</th></tr>';
+        + '<th style="padding:8px 10px;text-align:left;font-weight:600;border:1px solid #001f2c;min-width:160px;">Nama Toko</th>'
+        + '<th style="padding:8px 10px;text-align:left;font-weight:600;border:1px solid #001f2c;min-width:110px;">Kode Barang</th>'
+        + '<th style="padding:8px 10px;text-align:left;font-weight:600;border:1px solid #001f2c;min-width:170px;">Nama Barang</th>'
+        + '<th style="padding:8px 10px;text-align:center;font-weight:600;border:1px solid #001f2c;">Size</th>'
+        + '<th style="padding:8px 10px;text-align:center;font-weight:600;border:1px solid #001f2c;">Tier</th>'
+        + '<th style="padding:8px 10px;text-align:center;font-weight:600;border:1px solid #001f2c;background:#001f2c;">Assortment</th>'
+        + '<th style="padding:8px 10px;text-align:center;font-weight:600;border:1px solid #001f2c;">Stok On Hand</th>';
+    if (localLabel) {
+        th += '<th style="padding:8px 10px;text-align:center;font-weight:600;border:1px solid #001f2c;">' + esc(localLabel) + '</th>';
+    }
+    th += '<th style="padding:8px 10px;text-align:center;font-weight:600;border:1px solid #001f2c;">Stok WHS</th>'
+        + '</tr>';
     thead.innerHTML = th;
 
     // TBODY
-    if (visibleRows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="' + (5 + storeCols.length + 1) + '" style="padding:20px;text-align:center;color:var(--fg-soft);">Tidak ada SKU yang masuk filter (mungkin semua sudah OK?). Hilangkan centang "Sembunyikan baris semua-OK" untuk lihat semua.</td></tr>';
+    if (rows.length === 0) {
+        var totalCols = 7 + (localLabel ? 1 : 0) + 1;
+        tbody.innerHTML = '<tr><td colspan="' + totalCols + '" style="padding:20px;text-align:center;color:var(--fg-soft);">Tidak ada artikel yang kurang dari assortment di filter ini. Semua sesuai.</td></tr>';
         return;
     }
 
-    var html = visibleRows.map(function(r) {
-        var cells = '';
-        storeCols.forEach(function(s) {
-            var actual = r.stores[s] || 0;
-            var status = r._cellStatuses[s];
-            var style = _saCellStyle(status);
-            var content = actual ? actual : '·';
-            cells += '<td style="padding:5px 8px;text-align:center;border:1px solid var(--border);font-variant-numeric:tabular-nums;' + style + '">' + content + '</td>';
-        });
-        var rowBg = r._hasUnder ? 'background:#fff5f5;' : '';
-        return '<tr style="' + rowBg + '">'
-            + '<td style="position:sticky;left:0;z-index:1;background:var(--card);padding:6px 10px;font-weight:600;border:1px solid var(--border);font-variant-numeric:tabular-nums;">' + esc(r.kode_besar) + '</td>'
-            + '<td style="padding:6px 10px;text-align:center;border:1px solid var(--border);">' + esc(r.tier) + '</td>'
+    var html = rows.map(function(r) {
+        var stokStyle = r.is_under
+            ? 'background:#fee2e2;color:#991b1b;font-weight:700;'
+            : 'background:#dcfce7;color:#166534;font-weight:600;';
+        var rowBg = r.is_under ? 'background:#fff5f5;' : '';
+        var line = '<tr style="' + rowBg + '">'
+            + '<td style="padding:6px 10px;border:1px solid var(--border);font-size:10.5px;">' + esc(r.toko) + '</td>'
+            + '<td style="padding:6px 10px;border:1px solid var(--border);font-weight:600;font-variant-numeric:tabular-nums;font-size:10.5px;">' + esc(r.kode_besar) + '</td>'
             + '<td style="padding:6px 10px;border:1px solid var(--border);font-size:10.5px;">' + esc(r.article) + '</td>'
             + '<td style="padding:6px 10px;text-align:center;border:1px solid var(--border);">' + esc(r.size) + '</td>'
-            + '<td style="padding:6px 10px;text-align:center;border:1px solid var(--border);background:#f8fafc;font-weight:700;color:var(--navy);">' + r.expected + '</td>'
-            + cells
-            + '<td style="padding:6px 10px;text-align:center;border:1px solid var(--border);background:#f8fafc;font-weight:700;font-variant-numeric:tabular-nums;">' + r.total + '</td>'
+            + '<td style="padding:6px 10px;text-align:center;border:1px solid var(--border);">' + esc(r.tier) + '</td>'
+            + '<td style="padding:6px 10px;text-align:center;border:1px solid var(--border);background:#f8fafc;font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums;">' + r.expected + '</td>'
+            + '<td style="padding:6px 10px;text-align:center;border:1px solid var(--border);font-variant-numeric:tabular-nums;' + stokStyle + '">' + r.actual + '</td>';
+        if (localLabel) {
+            line += '<td style="padding:6px 10px;text-align:center;border:1px solid var(--border);font-variant-numeric:tabular-nums;color:' + (r.wh_local ? 'var(--fg)' : 'var(--fg-soft)') + ';">' + (r.wh_local || '·') + '</td>';
+        }
+        line += '<td style="padding:6px 10px;text-align:center;border:1px solid var(--border);font-variant-numeric:tabular-nums;color:' + (r.wh_pusat ? 'var(--fg)' : 'var(--fg-soft)') + ';">' + (r.wh_pusat || '·') + '</td>'
             + '</tr>';
+        return line;
     }).join('');
     tbody.innerHTML = html;
 }
@@ -3375,29 +3405,26 @@ function saRender() {
 function saExport() {
     if (!Object.keys(assortmentDetailMap).length) { alert('Data assortment belum dimuat.'); return; }
     var rows = saBuildRows();
-    if (!rows.length) { alert('Tidak ada SKU di area ini.'); return; }
-    var storeSet = {};
-    rows.forEach(function(r){ Object.keys(r.stores).forEach(function(s){ storeSet[s] = true; }); });
-    var storeCols = Object.keys(storeSet).sort();
+    if (!rows.length) { alert('Tidak ada artikel yang kurang assortment di filter ini.'); return; }
+    var areaSel = (gf && gf.area) ? gf.area : '';
+    var localLabel = _saLocalWhLabel(areaSel);
 
-    var sheet = [];
-    var head = ['Kode Barang','Tier','Article','Size','Gender','Series','Expected (1 box)'].concat(storeCols).concat(['Total','Status']);
-    sheet.push(head);
+    var head = ['Nama Toko','Kode Barang','Nama Barang','Size','Tier','Gender','Series','Assortment','Stok On Hand'];
+    if (localLabel) head.push(localLabel);
+    head.push('Stok WHS');
+    head.push('Status');
+
+    var sheet = [head];
     rows.forEach(function(r) {
-        var line = [r.kode_besar, r.tier, r.article, r.size, r.gender, r.series, r.expected];
-        var hasUnder = false;
-        storeCols.forEach(function(s) {
-            var v = r.stores[s] || 0;
-            line.push(v);
-            if (v && v < r.expected) hasUnder = true;
-        });
-        line.push(r.total);
-        line.push(hasUnder ? 'KURANG' : (r.total ? 'OK' : 'KOSONG'));
+        var line = [r.toko, r.kode_besar, r.article, r.size, r.tier, r.gender, r.series, r.expected, r.actual];
+        if (localLabel) line.push(r.wh_local);
+        line.push(r.wh_pusat);
+        line.push(r.is_under ? 'KURANG' : 'PAS');
         sheet.push(line);
     });
 
     var entity = currentEntity || 'DDD';
-    var area = (gf && gf.area) ? gf.area : 'SEMUA';
+    var area = areaSel || 'SEMUA';
     var fname = 'Alert_Stok_' + entity + '_' + area + '_' + new Date().toISOString().slice(0,10) + '.xlsx';
 
     if (typeof window.ensureXlsx === 'function') {
@@ -3408,8 +3435,7 @@ function saExport() {
             XLSX.writeFile(wb, fname);
         });
     } else {
-        // CSV fallback
-        var csv = sheet.map(function(r){ return r.map(function(c){ return '"' + String(c).replace(/"/g,'""') + '"'; }).join(','); }).join('\n');
+        var csv = sheet.map(function(r){ return r.map(function(c){ return '"' + String(c == null ? '' : c).replace(/"/g,'""') + '"'; }).join(','); }).join('\n');
         var blob = new Blob([csv], { type: 'text/csv' });
         var url = URL.createObjectURL(blob);
         var a = document.createElement('a'); a.href = url; a.download = fname.replace('.xlsx','.csv');
