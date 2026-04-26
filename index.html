@@ -989,7 +989,7 @@ html, body {
       </div>
     </div>
     <div class="header-right">
-      <button class="btn-ghost" id="btnRefresh" title="Refresh data" onclick="location.reload()">
+      <button class="btn-ghost" id="btnRefresh" title="Refresh data (clear cache + reload)" onclick="(window.swrClear?window.swrClear():Promise.resolve()).then(function(){location.reload();});">
         <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M13.5 8a5.5 5.5 0 0 1-10.38 2.5M2.5 8a5.5 5.5 0 0 1 10.38-2.5"/><path d="M13.5 3v3.5H10M2.5 13v-3.5H6" stroke-linejoin="round"/></svg>
         Refresh
       </button>
@@ -1458,94 +1458,248 @@ function switchHubTab(tab) {
 var _dataLoaded = false;
 var _rdDataLoaded = false;
 
+// ============ INDEXEDDB SWR CACHE ============
+// Stale-while-revalidate: render cached data instantly, refresh in background.
+// Per-browser storage; server data untouched. Cache miss/error → falls through to live API.
+// Bypass: append ?nocache=1 to URL, or click Refresh (clears cache).
+var SWR_DB_NAME = 'zuma-inv-cache';
+var SWR_STORE = 'api';
+var SWR_VERSION = 1;                  // bump to invalidate ALL cached entries
+var SWR_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+var _swrDbPromise = null;
+
+function _swrOpenDB() {
+    if (_swrDbPromise) return _swrDbPromise;
+    _swrDbPromise = new Promise(function(resolve, reject) {
+        if (typeof indexedDB === 'undefined') return reject(new Error('no IDB'));
+        var req = indexedDB.open(SWR_DB_NAME, 1);
+        req.onupgradeneeded = function() {
+            try { req.result.createObjectStore(SWR_STORE); } catch(e) {}
+        };
+        req.onsuccess = function() { resolve(req.result); };
+        req.onerror = function() { reject(req.error); };
+    });
+    return _swrDbPromise;
+}
+function swrGet(url) {
+    return _swrOpenDB().then(function(db) {
+        return new Promise(function(resolve) {
+            try {
+                var tx = db.transaction(SWR_STORE, 'readonly');
+                var req = tx.objectStore(SWR_STORE).get(url);
+                req.onsuccess = function() {
+                    var v = req.result;
+                    if (!v || v.version !== SWR_VERSION) return resolve(null);
+                    if (Date.now() - v.timestamp > SWR_TTL_MS) return resolve(null);
+                    resolve(v.data);
+                };
+                req.onerror = function() { resolve(null); };
+            } catch (e) { resolve(null); }
+        });
+    }).catch(function() { return null; });
+}
+function swrSet(url, data) {
+    return _swrOpenDB().then(function(db) {
+        return new Promise(function(resolve) {
+            try {
+                var tx = db.transaction(SWR_STORE, 'readwrite');
+                tx.objectStore(SWR_STORE).put({ version: SWR_VERSION, timestamp: Date.now(), data: data }, url);
+                tx.oncomplete = function() { resolve(true); };
+                tx.onerror = function() { resolve(false); };
+            } catch (e) { resolve(false); }
+        });
+    }).catch(function() { return false; });
+}
+function swrClear() {
+    return _swrOpenDB().then(function(db) {
+        return new Promise(function(resolve) {
+            try {
+                var tx = db.transaction(SWR_STORE, 'readwrite');
+                tx.objectStore(SWR_STORE).clear();
+                tx.oncomplete = function() { resolve(true); };
+                tx.onerror = function() { resolve(false); };
+            } catch (e) { resolve(false); }
+        });
+    }).catch(function() { return false; });
+}
+window.swrClear = swrClear; // expose for Refresh button
+
+function _swrShowChip(text) {
+    var el = document.getElementById('swr-refresh-chip');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'swr-refresh-chip';
+        el.style.cssText = 'position:fixed;top:14px;right:14px;z-index:200;padding:7px 14px 7px 30px;background:var(--navy,#002A3A);color:#fff;font-size:11px;font-weight:500;border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,0.18);transition:opacity 0.3s;letter-spacing:0.01em;';
+        var sp = document.createElement('div');
+        sp.style.cssText = 'position:absolute;left:10px;top:50%;width:11px;height:11px;margin-top:-5.5px;border:1.5px solid rgba(255,255,255,0.3);border-top-color:#00E273;border-radius:50%;animation:spin 0.8s linear infinite;';
+        var sn = document.createElement('span');
+        el.appendChild(sp); el.appendChild(sn);
+        document.body.appendChild(el);
+    }
+    el.lastChild.textContent = text || 'Memperbarui data…';
+    el.style.opacity = '1';
+    el.style.display = 'block';
+}
+function _swrHideChip() {
+    var el = document.getElementById('swr-refresh-chip');
+    if (!el) return;
+    el.style.opacity = '0';
+    setTimeout(function() { if (el) el.style.display = 'none'; }, 300);
+}
+
 async function loadAllData() {
     const overlay = document.getElementById('api-loading-overlay');
-    if (overlay) overlay.style.display = 'flex';
 
-    // Critical path: 2 endpoints (stock + store-areas). Max-stock, assortment, consignment, sales = lazy.
-    var total = 2, done = 0;
-    function progress(label) {
-        done++;
-        var pct = Math.round((done/total)*100);
-        var bar = document.getElementById('loadingProgressBar');
-        var pctEl = document.getElementById('loadingPercent');
-        var st = document.getElementById('loadingStatus');
-        if (bar) bar.style.width = pct + '%';
-        if (pctEl) pctEl.textContent = pct + '%';
-        if (st) st.textContent = label;
+    function applySnapshotDate(meta) {
+        if (meta && meta.snapshot_date) {
+            try {
+                var d = new Date(meta.snapshot_date + 'T00:00:00');
+                var el = document.getElementById('data-snapshot-date');
+                if (el) el.textContent = d.toLocaleDateString('id-ID', { day:'numeric', month:'long', year:'numeric' });
+            } catch (e) {}
+        }
     }
-    function trackFetch(url, label, fallback) {
-        return fetchAPI(url).then(d=>{progress(label);return d;}).catch(()=>{progress(label);return fallback;});
-    }
-
-    try {
-        // Critical path: only what every tab needs — stock + store-areas
-        const [stock, storeAreas] = await Promise.all([
-            trackFetch('/api/stock', 'Data stok dimuat…', {}),
-            trackFetch('/api/store-areas', 'Data area dimuat…', {}),
-        ]);
+    function applyCriticalData(stock, areas) {
         allData = stock || {};
-        storeAreaMap = storeAreas || {};
+        storeAreaMap = areas || {};
+        applySnapshotDate(allData['_meta'] || {});
+        _dataLoaded = true;
+        try { if (typeof gfPopulateDependentFilters === 'function') gfPopulateDependentFilters(); } catch(e) { console.warn('gf populate:', e); }
+        _tabsInitialized = {};
+        switchHubTab(activeTab);
+    }
+
+    // Try cache first (unless bypass)
+    var bypass = location.search.indexOf('nocache') !== -1;
+    var cachedStock = bypass ? null : await swrGet('/api/stock');
+    var cachedAreas = bypass ? null : await swrGet('/api/store-areas');
+    var hasCache = cachedStock && cachedAreas;
+
+    if (hasCache) {
+        // === CACHE HIT — instant render, refresh in background ===
+        console.log('[SWR] cache hit — rendering instantly, refreshing in BG');
         maxStockMap = {};
         assortmentMap = {};
-        // /api/max-stock and /api/assortment moved to lazy fetch — see ensureMaxStock / ensureAssortment
-        const meta = allData['_meta'] || {};
-        if (meta.snapshot_date) {
-            const d = new Date(meta.snapshot_date + 'T00:00:00');
-            var el = document.getElementById('data-snapshot-date');
-            if (el) el.textContent = d.toLocaleDateString('id-ID', { day:'numeric', month:'long', year:'numeric' });
-        }
-        _dataLoaded = true;
-        // Populate global filter dropdowns now that data is available
-        try { if (typeof gfPopulateDependentFilters === 'function') gfPopulateDependentFilters(); } catch(e) { console.warn('gf populate:', e); }
+        applyCriticalData(cachedStock, cachedAreas);
+        if (overlay) overlay.style.display = 'none';
+        _swrShowChip('Memperbarui data…');
 
-        // Background fetch: consignment stock (~2s, only used by stockcontrol consig column + Stock On-Hand consig export)
-        fetchAPI('/api/stock/consignment').then(function(consig) {
-            consignmentStockItems = (consig && consig.data) ? consig.data : [];
-            consignmentStockData = consig && consig.data ? consig : { data: [] };
-            console.log('[BG] consignment loaded: ' + consignmentStockItems.length + ' items');
+        var oldSnapshot = (cachedStock['_meta'] || {}).snapshot_date || '';
+        Promise.all([
+            fetchAPI('/api/stock').then(function(d){ swrSet('/api/stock', d); return d; }).catch(function(){ return null; }),
+            fetchAPI('/api/store-areas').then(function(d){ swrSet('/api/store-areas', d); return d; }).catch(function(){ return null; })
+        ]).then(function(res) {
+            var freshStock = res[0], freshAreas = res[1];
+            if (!freshStock && !freshAreas) { _swrHideChip(); return; }
+            var newSnapshot = freshStock ? ((freshStock['_meta'] || {}).snapshot_date || '') : oldSnapshot;
+            // Only re-render if snapshot changed (avoid pointless flicker)
+            if (newSnapshot !== oldSnapshot || (freshAreas && JSON.stringify(freshAreas) !== JSON.stringify(cachedAreas))) {
+                console.log('[SWR] fresh data differs — re-rendering (snapshot ' + oldSnapshot + ' → ' + newSnapshot + ')');
+                applyCriticalData(freshStock || cachedStock, freshAreas || cachedAreas);
+            } else {
+                console.log('[SWR] fresh data identical to cache — no re-render needed');
+            }
+            _swrHideChip();
+        }).catch(function(e) { console.warn('SWR refresh:', e); _swrHideChip(); });
+    } else {
+        // === CACHE MISS — original flow with overlay ===
+        if (overlay) overlay.style.display = 'flex';
+        var total = 2, done = 0;
+        function progress(label) {
+            done++;
+            var pct = Math.round((done/total)*100);
+            var bar = document.getElementById('loadingProgressBar');
+            var pctEl = document.getElementById('loadingPercent');
+            var st = document.getElementById('loadingStatus');
+            if (bar) bar.style.width = pct + '%';
+            if (pctEl) pctEl.textContent = pct + '%';
+            if (st) st.textContent = label;
+        }
+        function trackFetch(url, label, fallback) {
+            return fetchAPI(url).then(function(d){ swrSet(url, d); progress(label); return d; }).catch(function(){ progress(label); return fallback; });
+        }
+        try {
+            const [stock, storeAreas] = await Promise.all([
+                trackFetch('/api/stock', 'Data stok dimuat…', {}),
+                trackFetch('/api/store-areas', 'Data area dimuat…', {})
+            ]);
+            maxStockMap = {};
+            assortmentMap = {};
+            applyCriticalData(stock, storeAreas);
+            if (overlay) overlay.style.display = 'none';
+        } catch (err) {
+            console.error('Load failed:', err);
+            var st = document.getElementById('loadingStatus');
+            if (st) { st.textContent = 'Gagal memuat data: ' + err.message; st.style.color = 'var(--danger, #ef4444)'; }
+            return;
+        }
+    }
+
+    // === BACKGROUND NON-CRITICAL FETCHES (with SWR) ===
+
+    // Consignment stock — Stock Control consig column + Stock On-Hand consig export
+    swrGet('/api/stock/consignment').then(function(cached) {
+        if (cached) {
+            consignmentStockItems = (cached && cached.data) ? cached.data : [];
+            consignmentStockData = cached && cached.data ? cached : { data: [] };
+            console.log('[SWR] consignment from cache: ' + consignmentStockItems.length + ' items');
             if (activeTab === 'stockcontrol') {
                 if (scSubTab === 'online' && typeof scoRender === 'function') scoRender();
                 else if (typeof scRender === 'function') scRender();
             }
-        }).catch(function(e){ console.warn('Consignment fetch:', e); consignmentStockItems = []; consignmentStockData = { data: [] }; });
+        }
+        fetchAPI('/api/stock/consignment').then(function(consig) {
+            swrSet('/api/stock/consignment', consig);
+            consignmentStockItems = (consig && consig.data) ? consig.data : [];
+            consignmentStockData = consig && consig.data ? consig : { data: [] };
+            console.log('[BG] consignment refreshed: ' + consignmentStockItems.length + ' items');
+            if (activeTab === 'stockcontrol') {
+                if (scSubTab === 'online' && typeof scoRender === 'function') scoRender();
+                else if (typeof scRender === 'function') scRender();
+            }
+        }).catch(function(e) {
+            console.warn('Consignment fetch:', e);
+            if (!cached) { consignmentStockItems = []; consignmentStockData = { data: [] }; }
+        });
+    });
 
-        // Background fetch: sales aggregate (pre-aggregated per kode_kecil) — matches master
-        // Format: { kode_kecil_lowercase: { jan: qty, feb: qty, ... }, _months: ['jan','feb','mar'], _days: 90 }
+    // Sales aggregate (retail + online) — Stock Control AVG/BLN
+    Promise.all([swrGet('/api/sales/aggregate'), swrGet('/api/sales/aggregate-online')]).then(function(cs) {
+        var cachedR = cs[0], cachedO = cs[1];
+        if (cachedR && cachedO) {
+            window.scSalesMap = { retail: cachedR, online: cachedO };
+            _scSalesLoaded = true;
+            console.log('[SWR] sales aggregate from cache');
+            if (activeTab === 'stockcontrol') {
+                if (scSubTab === 'online' && typeof scoRender === 'function') scoRender();
+                else if (typeof scRender === 'function') scRender();
+            }
+        }
         Promise.all([
-            fetchAPI('/api/sales/aggregate').catch(function(){ return {}; }),
-            fetchAPI('/api/sales/aggregate-online').catch(function(){ return {}; })
+            fetchAPI('/api/sales/aggregate').then(function(d){ swrSet('/api/sales/aggregate', d); return d; }).catch(function(){ return cachedR || {}; }),
+            fetchAPI('/api/sales/aggregate-online').then(function(d){ swrSet('/api/sales/aggregate-online', d); return d; }).catch(function(){ return cachedO || {}; })
         ]).then(function(res) {
             window.scSalesMap = { retail: res[0] || {}, online: res[1] || {} };
             _scSalesLoaded = true;
             var keysR = Object.keys(scSalesMap.retail).filter(function(k){ return k.charAt(0) !== '_'; }).length;
             var keysO = Object.keys(scSalesMap.online).filter(function(k){ return k.charAt(0) !== '_'; }).length;
-            console.log('[SC] sales aggregate loaded: retail=' + keysR + ' SKUs, online=' + keysO + ' SKUs, months=' + (scSalesMap.retail._months || scSalesMap.online._months || []));
+            console.log('[BG] sales aggregate refreshed: retail=' + keysR + ' online=' + keysO);
             if (activeTab === 'stockcontrol') {
                 if (scSubTab === 'online' && typeof scoRender === 'function') scoRender();
                 else if (typeof scRender === 'function') scRender();
             }
         }).catch(function(e){ console.warn('SC aggregate fetch:', e); });
+    });
 
-        // Init the currently-active tab
-        switchHubTab(activeTab);
-        // Force re-init (since _dataLoaded now true)
-        _tabsInitialized[activeTab] = false;
-        switchHubTab(activeTab);
-
-        if (overlay) overlay.style.display = 'none';
-
-        // Lightweight assortment fetch in background (non-blocking) — used by Stock On-Hand
-        // export's "Count Assortment" column. Won't block first paint.
-        if (!window._assortLoading) {
-            window._assortLoading = fetchAPI('/api/assortment').then(function(a) {
+    // Assortment — Stock On-Hand export only (lightweight)
+    if (!window._assortLoading) {
+        window._assortLoading = swrGet('/api/assortment').then(function(cached) {
+            if (cached) assortmentMap = cached;
+            return fetchAPI('/api/assortment').then(function(a) {
+                swrSet('/api/assortment', a);
                 assortmentMap = a || {};
-            }).catch(function(){ assortmentMap = {}; });
-        }
-    } catch (err) {
-        console.error('Load failed:', err);
-        var st = document.getElementById('loadingStatus');
-        if (st) { st.textContent = 'Gagal memuat data: ' + err.message; st.style.color = 'var(--danger, #ef4444)'; }
+            }).catch(function() { if (!cached) assortmentMap = {}; });
+        });
     }
 }
 
