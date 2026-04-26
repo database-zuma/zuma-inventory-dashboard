@@ -3155,8 +3155,11 @@ function _saEnsureAssortment() {
 }
 
 function saInit() {
-    _saEnsureAssortment().then(saRender);
+    _saEnsureAssortment().then(function(){ setTimeout(saRender, 0); });
 }
+
+// Hard cap rows rendered to avoid DOM explosion (50 stores × ~500 SKUs = 25k tr is too heavy)
+var SA_MAX_ROWS = 3000;
 
 // Map selected area → label for "local WH" column
 function _saLocalWhLabel(area) {
@@ -3325,9 +3328,27 @@ function saRender() {
         return;
     }
 
-    var rows = saBuildRows();
     var areaSel = (gf && gf.area) ? gf.area : '';
-    var localLabel = _saLocalWhLabel(areaSel); // null when no area or Jatim
+    // Guard: require Area filter — without it, 200+ stores × thousands of SKUs would freeze browser
+    if (!areaSel) {
+        thead.innerHTML = '';
+        tbody.innerHTML = '<tr><td style="padding:30px;text-align:center;color:var(--fg-soft);font-size:13px;">' +
+            '<div style="font-size:32px;margin-bottom:8px;">📍</div>' +
+            'Pilih <strong>Area</strong> di filter atas dulu (Bali / Jakarta / Jatim / Batam / Sulawesi / Sumatera).' +
+            '<div style="font-size:11px;margin-top:8px;color:var(--fg-soft);">Tanpa filter Area, data terlalu banyak dan browser jadi lemot.</div>' +
+            '</td></tr>';
+        if (kpiEl) kpiEl.innerHTML = '';
+        if (countEl) countEl.textContent = 'Pilih Area dulu';
+        return;
+    }
+
+    var rows = saBuildRows();
+    var localLabel = _saLocalWhLabel(areaSel); // null when Area=Jatim (Pusat IS local)
+    var truncated = false;
+    if (rows.length > SA_MAX_ROWS) {
+        rows = rows.slice(0, SA_MAX_ROWS);
+        truncated = true;
+    }
 
     // Stats
     var underCount = 0, deficitPairs = 0, tokoSet = {}, skuSet = {};
@@ -3353,7 +3374,9 @@ function saRender() {
         }).join('');
     }
     if (countEl) {
-        countEl.textContent = rows.length + ' baris · ' + Object.keys(tokoSet).length + ' toko · ' + Object.keys(skuSet).length + ' SKU';
+        var msg = rows.length + ' baris · ' + Object.keys(tokoSet).length + ' toko · ' + Object.keys(skuSet).length + ' SKU';
+        if (truncated) msg += ' · ⚠️ dipotong di ' + SA_MAX_ROWS + ' baris (pilih Toko/Tier/Search untuk persempit)';
+        countEl.textContent = msg;
     }
 
     // THEAD
