@@ -1531,28 +1531,6 @@ async function loadAllData() {
     }
 }
 
-// Register Service Worker for stale-while-revalidate API cache (instant repeat visits).
-// Bypass via ?nosw=1 query param if user wants to force network-only.
-(function () {
-    if (!('serviceWorker' in navigator)) return;
-    if ((location.search || '').indexOf('nosw=1') !== -1) {
-        // Opt-out: unregister any existing SW + clear caches
-        navigator.serviceWorker.getRegistrations().then(function (regs) { regs.forEach(function (r) { r.unregister(); }); });
-        if (typeof caches !== 'undefined') caches.keys().then(function (ks) { ks.forEach(function (k) { caches.delete(k); }); });
-        return;
-    }
-    window.addEventListener('load', function () {
-        navigator.serviceWorker.register('./sw.js').catch(function (err) { console.warn('SW register failed:', err); });
-    });
-    navigator.serviceWorker.addEventListener('message', function (e) {
-        if (e.data && e.data.type === 'sw-cache-updated') {
-            window._lastSyncAt = e.data.ts;
-            // Subtle re-render so user sees the fresh value
-            try { if (typeof gfDispatchToActiveTab === 'function') gfDispatchToActiveTab(); } catch(_) {}
-        }
-    });
-})();
-
 document.addEventListener('DOMContentLoaded', function() {
     // Wire tab buttons
     document.querySelectorAll('.tab-btn[data-tab]').forEach(function(b){
