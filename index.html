@@ -1531,6 +1531,19 @@ async function loadAllData() {
     }
 }
 
+// Cleanup: unregister any leftover Service Worker (from earlier perf experiment) so
+// no stale SW intercepts API requests on returning users.
+(function () {
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function (regs) {
+            regs.forEach(function (r) { r.unregister(); });
+        }).catch(function(){});
+        if (typeof caches !== 'undefined') {
+            caches.keys().then(function (ks) { ks.forEach(function (k) { caches.delete(k); }); }).catch(function(){});
+        }
+    }
+})();
+
 document.addEventListener('DOMContentLoaded', function() {
     // Wire tab buttons
     document.querySelectorAll('.tab-btn[data-tab]').forEach(function(b){
