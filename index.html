@@ -1431,7 +1431,17 @@ function switchHubTab(tab) {
         _tabsInitialized[tab] = true;
         try {
             if (tab === 'stockbyarea' && typeof initStockByArea === 'function') initStockByArea();
-            else if (tab === 'maxstock' && typeof updateMaxStockAnalysis === 'function') updateMaxStockAnalysis();
+            else if (tab === 'maxstock') {
+                // Lazy-fetch /api/max-stock on first open of this tab
+                if (!window._maxStockLoading && (!maxStockMap || !Object.keys(maxStockMap).length)) {
+                    window._maxStockLoading = fetchAPI('/api/max-stock').then(function(m) {
+                        maxStockMap = m || {};
+                        if (typeof updateMaxStockAnalysis === 'function') updateMaxStockAnalysis();
+                    }).catch(function(){ maxStockMap = {}; });
+                } else if (typeof updateMaxStockAnalysis === 'function') {
+                    updateMaxStockAnalysis();
+                }
+            }
             
             else if (tab === 'inventory') { if (typeof invPopulateFilters === 'function') invPopulateFilters(); if (typeof invRender === 'function') invRender(); if (typeof initStockByArea === 'function') initStockByArea(); }
             else if (tab === 'stockcontrol' && typeof scRender === 'function') {
@@ -1452,8 +1462,8 @@ async function loadAllData() {
     const overlay = document.getElementById('api-loading-overlay');
     if (overlay) overlay.style.display = 'flex';
 
-    // Critical path: 4 endpoints that block UI render. Consignment + sales moved to background.
-    var total = 4, done = 0;
+    // Critical path: 2 endpoints (stock + store-areas). Max-stock, assortment, consignment, sales = lazy.
+    var total = 2, done = 0;
     function progress(label) {
         done++;
         var pct = Math.round((done/total)*100);
@@ -1469,16 +1479,16 @@ async function loadAllData() {
     }
 
     try {
-        const [stock, storeAreas, maxStock, assort] = await Promise.all([
+        // Critical path: only what every tab needs — stock + store-areas
+        const [stock, storeAreas] = await Promise.all([
             trackFetch('/api/stock', 'Data stok dimuat…', {}),
             trackFetch('/api/store-areas', 'Data area dimuat…', {}),
-            trackFetch('/api/max-stock', 'Max stock dimuat…', {}),
-            trackFetch('/api/assortment', 'Assortment dimuat…', {}),
         ]);
         allData = stock || {};
         storeAreaMap = storeAreas || {};
-        maxStockMap = maxStock || {};
-        assortmentMap = assort || {};
+        maxStockMap = {};
+        assortmentMap = {};
+        // /api/max-stock and /api/assortment moved to lazy fetch — see ensureMaxStock / ensureAssortment
         const meta = allData['_meta'] || {};
         if (meta.snapshot_date) {
             const d = new Date(meta.snapshot_date + 'T00:00:00');
@@ -1524,6 +1534,14 @@ async function loadAllData() {
         switchHubTab(activeTab);
 
         if (overlay) overlay.style.display = 'none';
+
+        // Lightweight assortment fetch in background (non-blocking) — used by Stock On-Hand
+        // export's "Count Assortment" column. Won't block first paint.
+        if (!window._assortLoading) {
+            window._assortLoading = fetchAPI('/api/assortment').then(function(a) {
+                assortmentMap = a || {};
+            }).catch(function(){ assortmentMap = {}; });
+        }
     } catch (err) {
         console.error('Load failed:', err);
         var st = document.getElementById('loadingStatus');
