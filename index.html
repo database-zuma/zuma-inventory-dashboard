@@ -1055,6 +1055,7 @@ html, body {
   <nav class="tab-nav" id="tabNav">
     <button class="tab-btn" data-tab="inventory">Stock</button>
     <button class="tab-btn active" data-tab="stockcontrol">Stock Control</button>
+    <button class="tab-btn" data-tab="alertstock">🚨 Alert Stok</button>
     <button class="tab-btn" data-tab="maxstock">Max Stock</button>
     <button class="tab-btn" data-tab="skusearch" style="display:none;">SKU Search</button>
     <!-- Summary Report tab removed -->
@@ -1296,6 +1297,49 @@ html, body {
   <!-- ============== /ONLINE SECTION ============== -->
 
 </section>
+
+<!-- ============== ALERT STOCK TAB ============== -->
+<section class="tab-content" data-tab="alertstock">
+  <!-- KPI bar -->
+  <div class="kpi-grid" id="saKpi" style="grid-template-columns:repeat(4,1fr);"></div>
+
+  <!-- Color legend -->
+  <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:10.5px;color:var(--fg-soft);margin-bottom:8px;align-items:center;">
+    <span><span style="display:inline-block;width:14px;height:14px;background:#fee2e2;border:1px solid #fca5a5;vertical-align:middle;margin-right:5px;border-radius:3px;"></span>Kurang dari assortment</span>
+    <span><span style="display:inline-block;width:14px;height:14px;background:#dcfce7;border:1px solid #86efac;vertical-align:middle;margin-right:5px;border-radius:3px;"></span>Sesuai (1 box)</span>
+    <span><span style="display:inline-block;width:14px;height:14px;background:#fef3c7;border:1px solid #fcd34d;vertical-align:middle;margin-right:5px;border-radius:3px;"></span>Lebih dari 1 box</span>
+    <span><span style="display:inline-block;width:14px;height:14px;background:#f1f5f9;border:1px solid #e5e7eb;vertical-align:middle;margin-right:5px;border-radius:3px;"></span>Kosong (tidak distock)</span>
+    <span style="margin-left:auto;color:var(--fg-muted);">Hanya tier <strong>1, 2, 3, 8</strong> · Bandingkan dengan 1 box assortment per artikel</span>
+  </div>
+
+  <!-- TABLE CARD -->
+  <div class="card">
+    <div class="card-header">
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+        <div class="card-title">Alert Stok per Kode Barang</div>
+        <div class="card-meta" id="saCountInfo">—</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--fg-soft);cursor:pointer;">
+          <input type="checkbox" id="saHideOk" checked onchange="saRender()" style="cursor:pointer;">
+          Sembunyikan baris semua-OK
+        </label>
+        <button class="btn btn-primary" onclick="saExport()" title="Export Excel daftar SKU yang kurang dari assortment">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>
+          Export Excel
+        </button>
+      </div>
+    </div>
+    <div class="table-wrap" style="max-height:85vh;overflow:auto;">
+      <table id="saTable" style="border-collapse:separate;border-spacing:0;font-size:11.5px;width:max-content;min-width:100%;">
+        <thead id="saThead" style="position:sticky;top:0;z-index:5;"></thead>
+        <tbody id="saTbody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+<!-- ============== /ALERT STOCK TAB ============== -->
+
 <section class="tab-content" data-tab="maxstock">
   <!-- Hidden filter stubs — max stock reads from global filter bar -->
   <input type="hidden" id="msWHFilterArea" value="">
@@ -1448,6 +1492,7 @@ function switchHubTab(tab) {
                 scPopulateFilters();
                 if (scSubTab === 'online' && typeof scoRender === 'function') scoRender(); else scRender();
             }
+            else if (tab === 'alertstock' && typeof saInit === 'function') saInit();
             else if (tab === 'skusearch') { /* no init needed — waits for user input */ }
             else if (tab === 'summaryreport') { /* no init needed — just export buttons */ }
         } catch(e) { console.error('tab init:', tab, e); }
@@ -3086,6 +3131,290 @@ function exportStockByAreaCSV() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+}
+
+// === MODULE: alertstock ===
+// Tab "🚨 Alert Stok" — pivot toko vs kode_besar (tier 1/2/3/8 only),
+// cells colored by actual stock vs 1-box assortment expected.
+// Reuses sba* zone helpers + global filter Area/store.
+
+var assortmentDetailMap = {};   // {kode_besar_upper: {k, s, e, t, a, g, sr}}
+var _saAssortLoading = null;
+
+function _saEnsureAssortment() {
+    if (Object.keys(assortmentDetailMap).length || _saAssortLoading) return _saAssortLoading || Promise.resolve();
+    _saAssortLoading = (typeof swrGet === 'function' ? swrGet('/api/assortment-detail') : Promise.resolve(null))
+        .then(function(cached) {
+            if (cached) {
+                assortmentDetailMap = cached;
+                console.log('[SA] assortment-detail from cache: ' + Object.keys(cached).length + ' SKUs');
+                if (activeTab === 'alertstock') saRender();
+            }
+            return fetchAPI('/api/assortment-detail').then(function(d) {
+                if (typeof swrSet === 'function') swrSet('/api/assortment-detail', d);
+                assortmentDetailMap = d || {};
+                console.log('[SA] assortment-detail fresh: ' + Object.keys(assortmentDetailMap).length + ' SKUs');
+                if (activeTab === 'alertstock') saRender();
+            });
+        }).catch(function(e){ console.warn('SA fetch:', e); assortmentDetailMap = {}; });
+    return _saAssortLoading;
+}
+
+function saInit() {
+    _saEnsureAssortment().then(saRender);
+}
+
+// Build per-store breakdown for tier 1/2/3/8 SKUs only.
+// Output rows: { kode_besar, kode, name, size, tier, gender, series, expected, stores: {storeName: qty}, total }
+function saBuildRows() {
+    var entity = currentEntity;
+    var entData = (allData || {})[entity] || {};
+    var retItems = entData.retail || [];
+    var consigItems = (consignmentStockItems || []).filter(function(it){
+        return String(it.entity || '').toUpperCase() === String(entity).toUpperCase();
+    });
+    var areaMap = storeAreaMap || {};
+    var areaSel = (gf && gf.area) ? gf.area : '';     // global filter Area (zone like 'Bali')
+    var storeSel = (gf && gf.store) ? gf.store : '';  // single store filter
+    var byKB = {};
+
+    function process(items, kindLabel) {
+        items.forEach(function(it) {
+            var kbUpper = String(it.kode_kecil || '').toUpperCase();
+            if (!kbUpper) return;
+            var aDef = assortmentDetailMap[kbUpper];
+            if (!aDef) return; // not tier 1/2/3/8 → skip
+            var ss = it.store_stock || {};
+            Object.keys(ss).forEach(function(st) {
+                var ma = areaMap[String(st).toLowerCase()];
+                if (!ma) return; // unmapped store
+                if (areaSel) {
+                    var zone = (typeof sbaStoreMapArea === 'function') ? sbaStoreMapArea(ma) : ma;
+                    if (zone !== areaSel) return;
+                }
+                if (storeSel && String(st).toLowerCase() !== String(storeSel).toLowerCase()) return;
+                var qty = Number(ss[st]) || 0;
+                if (!byKB[kbUpper]) {
+                    byKB[kbUpper] = {
+                        kode_besar: kbUpper,
+                        kode: aDef.k || '',
+                        article: aDef.a || it.name || '',
+                        size: aDef.s || it.size || '',
+                        tier: aDef.t || '',
+                        gender: aDef.g || it.gender || '',
+                        series: aDef.sr || it.series || '',
+                        expected: Number(aDef.e) || 0,
+                        stores: {},
+                        total: 0,
+                    };
+                }
+                byKB[kbUpper].stores[st] = (byKB[kbUpper].stores[st] || 0) + qty;
+                byKB[kbUpper].total += qty;
+            });
+        });
+    }
+    process(retItems, 'retail');
+    process(consigItems, 'consig');
+
+    // Apply global Tier/Gender/Series/Search filters
+    var rows = Object.keys(byKB).map(function(k){ return byKB[k]; });
+    if (gf) {
+        if (gf.tier)    rows = rows.filter(function(r){ return String(r.tier) === String(gf.tier); });
+        if (gf.gender)  rows = rows.filter(function(r){ return String(r.gender).toLowerCase() === String(gf.gender).toLowerCase(); });
+        if (gf.series)  rows = rows.filter(function(r){ return String(r.series).toLowerCase() === String(gf.series).toLowerCase(); });
+        if (gf.search)  {
+            var q = String(gf.search).toLowerCase();
+            rows = rows.filter(function(r){
+                return r.kode_besar.toLowerCase().indexOf(q) !== -1
+                    || r.kode.toLowerCase().indexOf(q) !== -1
+                    || r.article.toLowerCase().indexOf(q) !== -1;
+            });
+        }
+    }
+
+    // Sort: by article name then size
+    rows.sort(function(a,b){
+        var ka = a.article + '|' + a.size, kb = b.article + '|' + b.size;
+        return ka.localeCompare(kb);
+    });
+    return rows;
+}
+
+function _saStatusForCell(actual, expected) {
+    if (!actual) return 'empty';        // 0 → not stocked
+    if (actual < expected) return 'under';
+    if (actual === expected) return 'ok';
+    return 'over';
+}
+function _saCellStyle(status) {
+    switch(status) {
+        case 'under': return 'background:#fee2e2;color:#991b1b;font-weight:700;';
+        case 'ok':    return 'background:#dcfce7;color:#166534;font-weight:600;';
+        case 'over':  return 'background:#fef3c7;color:#92400e;font-weight:600;';
+        case 'empty': return 'background:#f1f5f9;color:#94a3b8;';
+    }
+    return '';
+}
+
+function saRender() {
+    var thead = document.getElementById('saThead');
+    var tbody = document.getElementById('saTbody');
+    var kpiEl = document.getElementById('saKpi');
+    var countEl = document.getElementById('saCountInfo');
+    if (!thead || !tbody) return;
+
+    if (!Object.keys(assortmentDetailMap).length) {
+        thead.innerHTML = '';
+        tbody.innerHTML = '<tr><td style="padding:20px;text-align:center;color:var(--fg-soft);">Memuat data assortment…</td></tr>';
+        if (kpiEl) kpiEl.innerHTML = '';
+        if (countEl) countEl.textContent = '—';
+        return;
+    }
+
+    var rows = saBuildRows();
+    var hideOk = !!(document.getElementById('saHideOk') && document.getElementById('saHideOk').checked);
+
+    // Collect distinct store columns (sorted)
+    var storeSet = {};
+    rows.forEach(function(r){ Object.keys(r.stores).forEach(function(s){ storeSet[s] = true; }); });
+    var storeCols = Object.keys(storeSet).sort();
+
+    // Compute per-row stats + filter
+    var totalUnder = 0;       // count of cells flagged red (deficit)
+    var totalDeficit = 0;     // total pairs short
+    var skuFlagged = {};      // distinct kode_besar with at least 1 deficit cell
+    var visibleRows = [];
+
+    rows.forEach(function(r) {
+        var cellStatuses = {};
+        var rowHasUnder = false;
+        var rowHasNonOk = false;
+        storeCols.forEach(function(s) {
+            var actual = r.stores[s] || 0;
+            var status = _saStatusForCell(actual, r.expected);
+            cellStatuses[s] = status;
+            if (status === 'under') {
+                totalUnder++;
+                totalDeficit += (r.expected - actual);
+                skuFlagged[r.kode_besar] = true;
+                rowHasUnder = true;
+                rowHasNonOk = true;
+            }
+            if (status === 'over' || status === 'empty') rowHasNonOk = true;
+        });
+        r._cellStatuses = cellStatuses;
+        r._hasUnder = rowHasUnder;
+        r._hasNonOk = rowHasNonOk;
+        if (hideOk) {
+            // hide row if every visible cell is "ok" or no stores at all
+            if (rowHasUnder) visibleRows.push(r);
+        } else {
+            visibleRows.push(r);
+        }
+    });
+
+    // KPI
+    if (kpiEl) {
+        kpiEl.innerHTML = [
+            ['SKU Tier 1/2/3/8 di area ini', rows.length],
+            ['SKU dengan deficit', Object.keys(skuFlagged).length],
+            ['Total cell kurang dari box', totalUnder],
+            ['Total pairs short (vs 1 box)', totalDeficit],
+        ].map(function(p){
+            var label = p[0], val = p[1];
+            var color = (label.indexOf('deficit') !== -1 || label.indexOf('kurang') !== -1 || label.indexOf('short') !== -1) ? 'var(--danger)' : 'var(--fg)';
+            return '<div class="card" style="padding:14px 18px;"><div style="font-size:10px;color:var(--fg-soft);font-weight:600;letter-spacing:0.05em;text-transform:uppercase;">' + label + '</div><div style="font-size:20px;font-weight:700;color:' + color + ';margin-top:4px;font-variant-numeric:tabular-nums;">' + Number(val).toLocaleString('id-ID') + '</div></div>';
+        }).join('');
+    }
+    if (countEl) {
+        countEl.textContent = visibleRows.length + ' / ' + rows.length + ' SKU · ' + storeCols.length + ' toko';
+    }
+
+    // THEAD
+    var th = '<tr style="background:var(--navy);color:#fff;">'
+        + '<th style="position:sticky;left:0;z-index:6;background:var(--navy);padding:7px 10px;text-align:left;font-weight:600;border:1px solid #001f2c;min-width:120px;">Kode Barang</th>'
+        + '<th style="padding:7px 10px;text-align:center;font-weight:600;border:1px solid #001f2c;">Tier</th>'
+        + '<th style="padding:7px 10px;text-align:left;font-weight:600;border:1px solid #001f2c;min-width:160px;">Article</th>'
+        + '<th style="padding:7px 10px;text-align:center;font-weight:600;border:1px solid #001f2c;">Size</th>'
+        + '<th style="padding:7px 10px;text-align:center;font-weight:600;border:1px solid #001f2c;background:#001f2c;">Box (1×)</th>';
+    storeCols.forEach(function(s){
+        th += '<th style="padding:7px 8px;text-align:center;font-weight:600;border:1px solid #001f2c;writing-mode:vertical-rl;transform:rotate(180deg);min-width:36px;height:90px;">' + esc(s) + '</th>';
+    });
+    th += '<th style="padding:7px 10px;text-align:center;font-weight:600;border:1px solid #001f2c;background:#001f2c;">Total</th></tr>';
+    thead.innerHTML = th;
+
+    // TBODY
+    if (visibleRows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="' + (5 + storeCols.length + 1) + '" style="padding:20px;text-align:center;color:var(--fg-soft);">Tidak ada SKU yang masuk filter (mungkin semua sudah OK?). Hilangkan centang "Sembunyikan baris semua-OK" untuk lihat semua.</td></tr>';
+        return;
+    }
+
+    var html = visibleRows.map(function(r) {
+        var cells = '';
+        storeCols.forEach(function(s) {
+            var actual = r.stores[s] || 0;
+            var status = r._cellStatuses[s];
+            var style = _saCellStyle(status);
+            var content = actual ? actual : '·';
+            cells += '<td style="padding:5px 8px;text-align:center;border:1px solid var(--border);font-variant-numeric:tabular-nums;' + style + '">' + content + '</td>';
+        });
+        var rowBg = r._hasUnder ? 'background:#fff5f5;' : '';
+        return '<tr style="' + rowBg + '">'
+            + '<td style="position:sticky;left:0;z-index:1;background:var(--card);padding:6px 10px;font-weight:600;border:1px solid var(--border);font-variant-numeric:tabular-nums;">' + esc(r.kode_besar) + '</td>'
+            + '<td style="padding:6px 10px;text-align:center;border:1px solid var(--border);">' + esc(r.tier) + '</td>'
+            + '<td style="padding:6px 10px;border:1px solid var(--border);font-size:10.5px;">' + esc(r.article) + '</td>'
+            + '<td style="padding:6px 10px;text-align:center;border:1px solid var(--border);">' + esc(r.size) + '</td>'
+            + '<td style="padding:6px 10px;text-align:center;border:1px solid var(--border);background:#f8fafc;font-weight:700;color:var(--navy);">' + r.expected + '</td>'
+            + cells
+            + '<td style="padding:6px 10px;text-align:center;border:1px solid var(--border);background:#f8fafc;font-weight:700;font-variant-numeric:tabular-nums;">' + r.total + '</td>'
+            + '</tr>';
+    }).join('');
+    tbody.innerHTML = html;
+}
+
+function saExport() {
+    if (!Object.keys(assortmentDetailMap).length) { alert('Data assortment belum dimuat.'); return; }
+    var rows = saBuildRows();
+    if (!rows.length) { alert('Tidak ada SKU di area ini.'); return; }
+    var storeSet = {};
+    rows.forEach(function(r){ Object.keys(r.stores).forEach(function(s){ storeSet[s] = true; }); });
+    var storeCols = Object.keys(storeSet).sort();
+
+    var sheet = [];
+    var head = ['Kode Barang','Tier','Article','Size','Gender','Series','Expected (1 box)'].concat(storeCols).concat(['Total','Status']);
+    sheet.push(head);
+    rows.forEach(function(r) {
+        var line = [r.kode_besar, r.tier, r.article, r.size, r.gender, r.series, r.expected];
+        var hasUnder = false;
+        storeCols.forEach(function(s) {
+            var v = r.stores[s] || 0;
+            line.push(v);
+            if (v && v < r.expected) hasUnder = true;
+        });
+        line.push(r.total);
+        line.push(hasUnder ? 'KURANG' : (r.total ? 'OK' : 'KOSONG'));
+        sheet.push(line);
+    });
+
+    var entity = currentEntity || 'DDD';
+    var area = (gf && gf.area) ? gf.area : 'SEMUA';
+    var fname = 'Alert_Stok_' + entity + '_' + area + '_' + new Date().toISOString().slice(0,10) + '.xlsx';
+
+    if (typeof window.ensureXlsx === 'function') {
+        window.ensureXlsx().then(function(){
+            var wb = XLSX.utils.book_new();
+            var ws = XLSX.utils.aoa_to_sheet(sheet);
+            XLSX.utils.book_append_sheet(wb, ws, 'Alert Stok');
+            XLSX.writeFile(wb, fname);
+        });
+    } else {
+        // CSV fallback
+        var csv = sheet.map(function(r){ return r.map(function(c){ return '"' + String(c).replace(/"/g,'""') + '"'; }).join(','); }).join('\n');
+        var blob = new Blob([csv], { type: 'text/csv' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a'); a.href = url; a.download = fname.replace('.xlsx','.csv');
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }
 }
 
 // === MODULE: skusearch ===
@@ -5462,7 +5791,7 @@ function gfDispatchToActiveTab() {
             case 'stockcontrol':   if (typeof scRender === 'function') scRender(); break;
             case 'stockbyarea':    if (typeof renderStockByArea === 'function') renderStockByArea(); break;
             case 'maxstock':       if (typeof updateMaxStockAnalysis === 'function') updateMaxStockAnalysis(); break;
-            
+            case 'alertstock':     if (typeof saRender === 'function') saRender(); break;
             case 'skusearch':      if (gf.search && typeof runSearch === 'function') { var inp = document.getElementById('skuInput'); if (inp) inp.value = gf.search; runSearch(); } break;
             default: break;
         }
