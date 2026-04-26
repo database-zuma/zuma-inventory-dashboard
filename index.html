@@ -1317,7 +1317,11 @@ html, body {
         <div class="card-title">Alert Stok — Toko × Kode Barang</div>
         <div class="card-meta" id="saCountInfo">—</div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;">
+      <div style="display:flex;gap:14px;align-items:center;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--fg-soft);cursor:pointer;">
+          <input type="checkbox" id="saShowPas" onchange="saRender()" style="cursor:pointer;">
+          Tampilkan baris PAS juga
+        </label>
         <button class="btn btn-primary" onclick="saExport()" title="Export Excel">
           <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>
           Export Excel
@@ -3158,8 +3162,9 @@ function saInit() {
     _saEnsureAssortment().then(function(){ setTimeout(saRender, 0); });
 }
 
-// Hard cap rows rendered to avoid DOM explosion (50 stores × ~500 SKUs = 25k tr is too heavy)
-var SA_MAX_ROWS = 3000;
+// Hard cap rows rendered to avoid DOM explosion. PAS rows hidden by default
+// (only KURANG = actionable). User can toggle to see PAS too.
+var SA_MAX_ROWS = 500;
 
 // Map selected area → label for "local WH" column
 function _saLocalWhLabel(area) {
@@ -3342,17 +3347,16 @@ function saRender() {
         return;
     }
 
-    var rows = saBuildRows();
+    var allRows = saBuildRows();
+    var showPas = !!(document.getElementById('saShowPas') && document.getElementById('saShowPas').checked);
     var localLabel = _saLocalWhLabel(areaSel); // null when Area=Jatim (Pusat IS local)
-    var truncated = false;
-    if (rows.length > SA_MAX_ROWS) {
-        rows = rows.slice(0, SA_MAX_ROWS);
-        truncated = true;
-    }
 
-    // Stats
+    // Filter: only KURANG by default (PAS hidden unless toggle)
+    var filteredRows = showPas ? allRows : allRows.filter(function(r){ return r.is_under; });
+
+    // Stats over ALL rows (not just filtered) — KPIs show full picture
     var underCount = 0, deficitPairs = 0, tokoSet = {}, skuSet = {};
-    rows.forEach(function(r) {
+    allRows.forEach(function(r) {
         tokoSet[r.toko] = true;
         skuSet[r.kode_besar] = true;
         if (r.is_under) {
@@ -3360,6 +3364,15 @@ function saRender() {
             deficitPairs += (r.expected - r.actual);
         }
     });
+
+    // Cap on FILTERED rows (after PAS removed)
+    var totalAfterFilter = filteredRows.length;
+    var truncated = false;
+    if (filteredRows.length > SA_MAX_ROWS) {
+        filteredRows = filteredRows.slice(0, SA_MAX_ROWS);
+        truncated = true;
+    }
+    var rows = filteredRows;
 
     if (kpiEl) {
         kpiEl.innerHTML = [
@@ -3374,55 +3387,73 @@ function saRender() {
         }).join('');
     }
     if (countEl) {
-        var msg = rows.length + ' baris · ' + Object.keys(tokoSet).length + ' toko · ' + Object.keys(skuSet).length + ' SKU';
-        if (truncated) msg += ' · ⚠️ dipotong di ' + SA_MAX_ROWS + ' baris (pilih Toko/Tier/Search untuk persempit)';
+        var msg = rows.length + ' baris ditampilkan';
+        if (showPas) msg += ' (PAS + KURANG)'; else msg += ' (KURANG only)';
+        msg += ' · ' + underCount + ' kurang · ' + Object.keys(tokoSet).length + ' toko · ' + Object.keys(skuSet).length + ' SKU';
+        if (truncated) msg += ' · ⚠️ dipotong di ' + SA_MAX_ROWS + ' (' + totalAfterFilter + ' total — sempitkan dengan Toko/Tier/Search)';
         countEl.textContent = msg;
     }
 
-    // THEAD
+    // THEAD — using class-based styles via the .data table convention is heavier; keep inline but minimal
+    var thStyle = 'padding:8px 10px;text-align:left;font-weight:600;border:1px solid #001f2c;';
+    var thStyleC = 'padding:8px 10px;text-align:center;font-weight:600;border:1px solid #001f2c;';
     var th = '<tr style="background:var(--navy);color:#fff;">'
-        + '<th style="padding:8px 10px;text-align:left;font-weight:600;border:1px solid #001f2c;min-width:160px;">Nama Toko</th>'
-        + '<th style="padding:8px 10px;text-align:left;font-weight:600;border:1px solid #001f2c;min-width:110px;">Kode Barang</th>'
-        + '<th style="padding:8px 10px;text-align:left;font-weight:600;border:1px solid #001f2c;min-width:170px;">Nama Barang</th>'
-        + '<th style="padding:8px 10px;text-align:center;font-weight:600;border:1px solid #001f2c;">Size</th>'
-        + '<th style="padding:8px 10px;text-align:center;font-weight:600;border:1px solid #001f2c;">Tier</th>'
-        + '<th style="padding:8px 10px;text-align:center;font-weight:600;border:1px solid #001f2c;background:#001f2c;">Assortment</th>'
-        + '<th style="padding:8px 10px;text-align:center;font-weight:600;border:1px solid #001f2c;">Stok On Hand</th>';
-    if (localLabel) {
-        th += '<th style="padding:8px 10px;text-align:center;font-weight:600;border:1px solid #001f2c;">' + esc(localLabel) + '</th>';
-    }
-    th += '<th style="padding:8px 10px;text-align:center;font-weight:600;border:1px solid #001f2c;">Stok WHS</th>'
-        + '</tr>';
+        + '<th style="' + thStyle + 'min-width:160px;">Nama Toko</th>'
+        + '<th style="' + thStyle + 'min-width:110px;">Kode Barang</th>'
+        + '<th style="' + thStyle + 'min-width:170px;">Nama Barang</th>'
+        + '<th style="' + thStyleC + '">Size</th>'
+        + '<th style="' + thStyleC + '">Tier</th>'
+        + '<th style="' + thStyleC + 'background:#001f2c;">Assortment</th>'
+        + '<th style="' + thStyleC + '">Stok On Hand</th>';
+    if (localLabel) th += '<th style="' + thStyleC + '">' + esc(localLabel) + '</th>';
+    th += '<th style="' + thStyleC + '">Stok WHS</th></tr>';
     thead.innerHTML = th;
 
     // TBODY
     if (rows.length === 0) {
         var totalCols = 7 + (localLabel ? 1 : 0) + 1;
-        tbody.innerHTML = '<tr><td colspan="' + totalCols + '" style="padding:20px;text-align:center;color:var(--fg-soft);">Tidak ada artikel yang kurang dari assortment di filter ini. Semua sesuai.</td></tr>';
+        var emptyMsg = (allRows.length > 0 && !showPas)
+            ? '✅ Tidak ada baris KURANG. Centang "Tampilkan baris PAS juga" untuk lihat ' + allRows.length + ' baris yang sudah pas.'
+            : 'Tidak ada artikel di filter ini.';
+        tbody.innerHTML = '<tr><td colspan="' + totalCols + '" style="padding:20px;text-align:center;color:var(--fg-soft);">' + emptyMsg + '</td></tr>';
         return;
     }
 
-    var html = rows.map(function(r) {
-        var stokStyle = r.is_under
-            ? 'background:#fee2e2;color:#991b1b;font-weight:700;'
-            : 'background:#dcfce7;color:#166534;font-weight:600;';
-        var rowBg = r.is_under ? 'background:#fff5f5;' : '';
-        var line = '<tr style="' + rowBg + '">'
-            + '<td style="padding:6px 10px;border:1px solid var(--border);font-size:10.5px;">' + esc(r.toko) + '</td>'
-            + '<td style="padding:6px 10px;border:1px solid var(--border);font-weight:600;font-variant-numeric:tabular-nums;font-size:10.5px;">' + esc(r.kode_besar) + '</td>'
-            + '<td style="padding:6px 10px;border:1px solid var(--border);font-size:10.5px;">' + esc(r.article) + '</td>'
-            + '<td style="padding:6px 10px;text-align:center;border:1px solid var(--border);">' + esc(r.size) + '</td>'
-            + '<td style="padding:6px 10px;text-align:center;border:1px solid var(--border);">' + esc(r.tier) + '</td>'
-            + '<td style="padding:6px 10px;text-align:center;border:1px solid var(--border);background:#f8fafc;font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums;">' + r.expected + '</td>'
-            + '<td style="padding:6px 10px;text-align:center;border:1px solid var(--border);font-variant-numeric:tabular-nums;' + stokStyle + '">' + r.actual + '</td>';
+    // Render via DocumentFragment + innerHTML batched join — class-based styling for speed.
+    // Inject scoped CSS once on first render.
+    if (!document.getElementById('sa-table-css')) {
+        var st = document.createElement('style');
+        st.id = 'sa-table-css';
+        st.textContent =
+            '#saTable td{padding:6px 10px;border:1px solid var(--border);font-size:10.5px;font-variant-numeric:tabular-nums;}' +
+            '#saTable td.c{text-align:center;}' +
+            '#saTable td.b{font-weight:600;}' +
+            '#saTable td.exp{text-align:center;background:#f8fafc;font-weight:700;color:var(--navy);}' +
+            '#saTable td.under{text-align:center;background:#fee2e2;color:#991b1b;font-weight:700;}' +
+            '#saTable td.pas{text-align:center;background:#dcfce7;color:#166534;font-weight:600;}' +
+            '#saTable td.dim{text-align:center;color:var(--fg-soft);}' +
+            '#saTable tr.urow{background:#fff5f5;}';
+        document.head.appendChild(st);
+    }
+
+    var parts = [];
+    for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        var stokCls = r.is_under ? 'under' : 'pas';
+        var rowCls = r.is_under ? ' class="urow"' : '';
+        parts.push('<tr', rowCls, '><td>', esc(r.toko),
+            '</td><td class="b">', esc(r.kode_besar),
+            '</td><td>', esc(r.article),
+            '</td><td class="c">', esc(r.size),
+            '</td><td class="c">', esc(r.tier),
+            '</td><td class="exp">', r.expected,
+            '</td><td class="', stokCls, '">', r.actual, '</td>');
         if (localLabel) {
-            line += '<td style="padding:6px 10px;text-align:center;border:1px solid var(--border);font-variant-numeric:tabular-nums;color:' + (r.wh_local ? 'var(--fg)' : 'var(--fg-soft)') + ';">' + (r.wh_local || '·') + '</td>';
+            parts.push('<td class="', r.wh_local ? 'c' : 'dim', '">', r.wh_local || '·', '</td>');
         }
-        line += '<td style="padding:6px 10px;text-align:center;border:1px solid var(--border);font-variant-numeric:tabular-nums;color:' + (r.wh_pusat ? 'var(--fg)' : 'var(--fg-soft)') + ';">' + (r.wh_pusat || '·') + '</td>'
-            + '</tr>';
-        return line;
-    }).join('');
-    tbody.innerHTML = html;
+        parts.push('<td class="', r.wh_pusat ? 'c' : 'dim', '">', r.wh_pusat || '·', '</td></tr>');
+    }
+    tbody.innerHTML = parts.join('');
 }
 
 function saExport() {
