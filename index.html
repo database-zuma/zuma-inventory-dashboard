@@ -896,6 +896,73 @@ html, body {
 }
 .placeholder-card a:hover { background: #003c53; }
 
+/* ============================================================
+   RESPONSIVE — additive media queries; PC view (>1024px) unchanged
+   ============================================================ */
+
+/* TABLET (≤1024px) */
+@media (max-width: 1024px) {
+  .shell { padding: 12px 14px 30px; }
+  .header { padding: 10px 12px; gap: 10px; }
+
+  /* KPI grid: 4 → 2 cols */
+  .kpi-grid,
+  .kpi-grid[style*="repeat(4"] { grid-template-columns: repeat(2, 1fr) !important; }
+  .kpi-grid[style*="repeat(6"] { grid-template-columns: repeat(3, 1fr) !important; }
+
+  /* Filter bar: allow wrap so all controls visible */
+  .filter-bar { flex-wrap: wrap; gap: 8px; }
+  .filter-group { min-width: 120px; }
+  .filter-group.flex { flex: 1 1 100%; }
+
+  /* Tab nav stays one row but can scroll horizontally */
+  .tab-nav { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+  .tab-nav .tab-btn { flex-shrink: 0; }
+
+  /* Tables get horizontal scroll instead of squeezing */
+  .table-wrap { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+  table.data { min-width: 800px; }
+}
+
+/* PHONE (≤640px) */
+@media (max-width: 640px) {
+  .shell { padding: 8px 10px 24px; }
+
+  /* KPI cards: 1 col stacking */
+  .kpi-grid,
+  .kpi-grid[style*="repeat"] { grid-template-columns: 1fr !important; gap: 6px !important; }
+
+  /* Header brand smaller, action buttons stack */
+  .header { flex-direction: column; align-items: flex-start; }
+
+  /* Sub-tab strips remain horizontal-scrollable */
+  .tab-nav { font-size: 11px; }
+  .tab-btn { padding: 8px 10px; font-size: 11px; }
+
+  /* Filter group min-width softens, every group full row on phone */
+  .filter-group { min-width: 100%; }
+
+  /* KPI value font size adapts */
+  .kpi-value { font-size: 1.6rem; }
+  .kpi-label { font-size: 10px; }
+  .kpi-sub { font-size: 10px; }
+
+  /* Card padding tighter */
+  .card-header { padding: 10px 12px; flex-wrap: wrap; gap: 8px; }
+  .card-header .btn { font-size: 11px; padding: 6px 10px; }
+  .card-title { font-size: 13px; }
+
+  /* Modals: full-screen-ish on phone */
+  #minusDetailModal > div,
+  #tierDetailModal > div { max-width: 100% !important; max-height: 92vh !important; border-radius: 0 !important; }
+
+  /* Status badge slightly smaller */
+  table.data { font-size: 10.5px; min-width: 720px; }
+
+  /* Two-column kpi grids fall back to one column */
+  .grid-2 { grid-template-columns: 1fr !important; }
+}
+
 </style>
 </head>
 <body>
