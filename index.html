@@ -4444,9 +4444,12 @@ function invExportContextual() {
 
 // === Stock Control: kode-level breakdown modal (per gudang × entity) ===
 // Triggered by clicking a kode_kecil cell in Stock Control kodeKecil view mode.
-function scShowKodeBreakdown(kode) {
+// mode: 'retail' (default) shows Warehouse + Retail + Konsinyasi.
+//       'online'           shows ONLY warehouses with "online" in name (WH Online Bali/Jkt).
+function scShowKodeBreakdown(kode, mode) {
     var kodeUp = String(kode || '').toUpperCase();
     if (!kodeUp) return;
+    mode = (mode === 'online') ? 'online' : 'retail';
 
     // Build pivot: agg[tipe||lokasi||size] = { tipe, lokasi, size, DDD, MBB, UBB, LJBB, CONSIG }
     var agg = {};
@@ -4457,7 +4460,7 @@ function scShowKodeBreakdown(kode) {
         return agg[key];
     }
 
-    // Warehouse rows
+    // Warehouse rows. Online mode keeps only "warehouse online …", Retail mode skips them.
     ['DDD','LJBB','MBB','UBB'].forEach(function(ent) {
         var ed = (typeof allData !== 'undefined' && allData[ent]) ? allData[ent] : {};
         (ed.warehouse || []).forEach(function(it) {
@@ -4467,44 +4470,49 @@ function scShowKodeBreakdown(kode) {
             Object.keys(ss).forEach(function(wh) {
                 var qty = Number(ss[wh]) || 0;
                 if (!qty) return;
-                getRow('Warehouse', wh, it.size || '')[ent] += qty;
+                var isOnlineWh = String(wh).toLowerCase().indexOf('online') !== -1;
+                if (mode === 'online' && !isOnlineWh) return;
+                if (mode === 'retail' && isOnlineWh) return;
+                var label = (mode === 'online') ? 'WH Online' : 'Warehouse';
+                getRow(label, wh, it.size || '')[ent] += qty;
             });
         });
     });
-    // Retail rows (skip locations with "warehouse" in name — those are double-counted under WH)
-    ['DDD','MBB','UBB'].forEach(function(ent) {
-        var ed = (typeof allData !== 'undefined' && allData[ent]) ? allData[ent] : {};
-        (ed.retail || []).forEach(function(it) {
+    // Retail + Konsinyasi only shown in retail mode (Online sub-tab is WH-only).
+    if (mode === 'retail') {
+        ['DDD','MBB','UBB'].forEach(function(ent) {
+            var ed = (typeof allData !== 'undefined' && allData[ent]) ? allData[ent] : {};
+            (ed.retail || []).forEach(function(it) {
+                if (String(it.kode || '').toUpperCase() !== kodeUp) return;
+                if (!rowName) rowName = it.name || '';
+                var ss = it.store_stock || {};
+                Object.keys(ss).forEach(function(s) {
+                    if (String(s).toLowerCase().indexOf('warehouse') !== -1) return;
+                    var qty = Number(ss[s]) || 0;
+                    if (!qty) return;
+                    getRow('Retail', s, it.size || '')[ent] += qty;
+                });
+            });
+        });
+        var consigArr = (typeof consignmentStockItems !== 'undefined') ? consignmentStockItems : [];
+        consigArr.forEach(function(it) {
             if (String(it.kode || '').toUpperCase() !== kodeUp) return;
             if (!rowName) rowName = it.name || '';
             var ss = it.store_stock || {};
             Object.keys(ss).forEach(function(s) {
-                if (String(s).toLowerCase().indexOf('warehouse') !== -1) return;
                 var qty = Number(ss[s]) || 0;
                 if (!qty) return;
-                getRow('Retail', s, it.size || '')[ent] += qty;
+                getRow('Konsinyasi', s, it.size || '').CONSIG += qty;
             });
         });
-    });
-    // Consignment (no entity attribution — bucket as CONSIG)
-    var consigArr = (typeof consignmentStockItems !== 'undefined') ? consignmentStockItems : [];
-    consigArr.forEach(function(it) {
-        if (String(it.kode || '').toUpperCase() !== kodeUp) return;
-        if (!rowName) rowName = it.name || '';
-        var ss = it.store_stock || {};
-        Object.keys(ss).forEach(function(s) {
-            var qty = Number(ss[s]) || 0;
-            if (!qty) return;
-            getRow('Konsinyasi', s, it.size || '').CONSIG += qty;
-        });
-    });
+    }
 
     var rows = Object.values(agg).map(function(r){
         r.total = r.DDD + r.MBB + r.UBB + r.LJBB + r.CONSIG;
         return r;
     }).filter(function(r){ return r.total !== 0; });
 
-    var tipeOrder = { 'Warehouse': 1, 'Retail': 2, 'Konsinyasi': 3 };
+    var tipeOrder = { 'Warehouse': 1, 'WH Online': 1, 'Retail': 2, 'Konsinyasi': 3 };
     rows.sort(function(a,b){
         var ta = tipeOrder[a.tipe] || 9, tb = tipeOrder[b.tipe] || 9;
         if (ta !== tb) return ta - tb;
@@ -4567,7 +4575,7 @@ function scShowKodeBreakdown(kode) {
     rows.forEach(function(r){
         var sep = (lastTipe && lastTipe !== r.tipe) ? 'border-top:2px solid var(--border);' : '';
         lastTipe = r.tipe;
-        var tipeBadge = r.tipe === 'Warehouse' ? '#0ea5e9' : (r.tipe === 'Retail' ? '#16a34a' : '#a855f7');
+        var tipeBadge = (r.tipe === 'Warehouse' || r.tipe === 'WH Online') ? '#0ea5e9' : (r.tipe === 'Retail' ? '#16a34a' : '#a855f7');
         html += '<tr style="' + sep + '">' +
             '<td><span style="display:inline-block;padding:2px 8px;border-radius:3px;background:' + tipeBadge + ';color:#fff;font-size:10px;font-weight:700;">' + esc(r.tipe) + '</span></td>' +
             '<td>' + esc(r.lokasi) + '</td>' +
@@ -5029,7 +5037,7 @@ function scRender() {
                 } else {
                     // KodeKecil mode = article-level code (no size) — clickable to show breakdown
                     var kodeUp = String(r.kode).toUpperCase();
-                    firstCols = '<td style="font-family:ui-monospace,monospace;cursor:pointer;color:var(--navy);text-decoration:underline;text-decoration-color:rgba(0,42,58,0.35);text-underline-offset:2px;" onclick="scShowKodeBreakdown(&apos;' + kodeUp + '&apos;)" title="Klik untuk lihat breakdown stok per gudang & entity">' + esc(kodeUp) + '</td>';
+                    firstCols = '<td style="font-family:ui-monospace,monospace;cursor:pointer;color:var(--navy);text-decoration:underline;text-decoration-color:rgba(0,42,58,0.35);text-underline-offset:2px;" onclick="scShowKodeBreakdown(&apos;' + kodeUp + '&apos;,&apos;retail&apos;)" title="Klik untuk lihat breakdown stok per gudang & entity">' + esc(kodeUp) + '</td>';
                 }
                 return '<tr>' +
                     firstCols +
@@ -5427,7 +5435,7 @@ function scoRender() {
                                 '<td class="center" style="font-family:ui-monospace,monospace;">' + esc(r.size || '—') + '</td>';
                 } else {
                     var kodeUpO = String(r.kode).toUpperCase();
-                    firstCols = '<td style="font-family:ui-monospace,monospace;cursor:pointer;color:var(--navy);text-decoration:underline;text-decoration-color:rgba(0,42,58,0.35);text-underline-offset:2px;" onclick="scShowKodeBreakdown(&apos;' + kodeUpO + '&apos;)" title="Klik untuk lihat breakdown stok per gudang & entity">' + esc(kodeUpO) + '</td>';
+                    firstCols = '<td style="font-family:ui-monospace,monospace;cursor:pointer;color:var(--navy);text-decoration:underline;text-decoration-color:rgba(0,42,58,0.35);text-underline-offset:2px;" onclick="scShowKodeBreakdown(&apos;' + kodeUpO + '&apos;,&apos;online&apos;)" title="Klik untuk lihat breakdown stok per gudang online">' + esc(kodeUpO) + '</td>';
                 }
                 return '<tr>' +
                     firstCols +
