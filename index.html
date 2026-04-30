@@ -1150,7 +1150,7 @@ html, body {
       </button>
     </div>
     <div class="table-wrap" style="max-height:85vh;overflow:auto;">
-      <table id="sbaTable" style="border-collapse:separate;border-spacing:0;font-size:11.5px;width:max-content;min-width:100%;">
+      <table id="sbaTable" style="border-collapse:separate;border-spacing:0;font-size:11.5px;width:max-content;">
         <thead id="sbaThead" style="position:sticky;top:0;z-index:5;"></thead>
         <tbody id="sbaTbody"></tbody>
       </table>
@@ -2649,15 +2649,18 @@ function sbaWhToArea(whName) {
 }
 
 // Returns true if a warehouse should appear in the given zone.
-// WH Pusat (Surabaya) is the central supplier for Batam/Sulawesi/Sumatera, so it appears in those zones too.
+// WH Pusat (Surabaya) is the central supplier for ALL zones — appears in every area.
 function sbaWhInZone(whName, zone) {
     var z = sbaWhToArea(whName);
     if (z === zone) return true;
-    if (zone === 'Batam' || zone === 'Sulawesi' || zone === 'Sumatera') {
-        var n = String(whName || '').toLowerCase();
-        if (n.indexOf('pusat') !== -1 || n.indexOf('surabaya') !== -1) return true;
-    }
+    if (_sbaIsPusatWh(whName)) return true;
     return false;
+}
+
+// True if this WH is the central Pusat / Surabaya warehouse (WHS).
+function _sbaIsPusatWh(whName) {
+    var n = String(whName || '').toLowerCase();
+    return n.indexOf('pusat') !== -1 || n.indexOf('surabaya') !== -1;
 }
 
 function sbaStoreMapArea(mapArea) {
@@ -2743,7 +2746,10 @@ function buildStockByAreaRows(area) {
                 version: (it.version !== undefined && it.version !== null) ? String(it.version) : '',
                 gender: it.gender || '',
                 series: it.series || '',
-                whQty: 0, whStores: {}, tokoQty: 0, tokoStores: {}, consigQty: 0, consigStores: {}
+                whQty: 0, whStores: {},
+                whLocalQty: 0, whLocalStores: {},
+                whSQty: 0, whSStores: {},
+                tokoQty: 0, tokoStores: {}, consigQty: 0, consigStores: {}
             };
         }
         return byKK[kk];
@@ -2757,6 +2763,15 @@ function buildStockByAreaRows(area) {
             var qty = Number(ss[wh]) || 0;
             if (qty === 0) return;
             var row = ensure(kk, it);
+            // Split into local-WH bucket vs WHS (Pusat) bucket
+            if (_sbaIsPusatWh(wh)) {
+                row.whSStores[wh] = (row.whSStores[wh] || 0) + qty;
+                row.whSQty += qty;
+            } else {
+                row.whLocalStores[wh] = (row.whLocalStores[wh] || 0) + qty;
+                row.whLocalQty += qty;
+            }
+            // Keep legacy combined fields for export/compat
             row.whStores[wh] = (row.whStores[wh] || 0) + qty;
             row.whQty += qty;
         });
@@ -2836,8 +2851,13 @@ function buildSbaColumns(area) {
         });
     });
     function sortCI(a, b) { return String(a).toLowerCase().localeCompare(String(b).toLowerCase()); }
+    var allWh = Object.keys(whSet).sort(sortCI);
+    var whLocal = allWh.filter(function(w){ return !_sbaIsPusatWh(w); });
+    var whS = allWh.filter(function(w){ return _sbaIsPusatWh(w); });
     return {
-        wh: Object.keys(whSet).sort(sortCI),
+        wh: allWh,            // legacy combined (used by export)
+        whLocal: whLocal,     // non-Pusat WHs in zone (e.g. WHB / WHJ / etc)
+        whS: whS,             // Pusat / Surabaya = WHS, shown for ALL zones
         toko: Object.keys(tokoSet).sort(sortCI),
         consig: Object.keys(consigSet).sort(sortCI)
     };
@@ -2923,20 +2943,22 @@ function renderStockByArea() {
             '<div class="kpi-card"><div class="kpi-label">Consignment' + (showConsig ? '' : ' · OFF') + '</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular">' + fmt(sumConsig) + '</span></span></div><div class="kpi-sub">' + cols.consig.length + ' outlet</div></div>';
     }
 
-    var whLabelMap = { 'Bali': 'WHB', 'Jakarta': 'WHJ', 'Jatim': 'WHS' };
-    var whLabel = whLabelMap[area] || ('WH ' + area);
+    var whLabelMap = { 'Bali': 'WHB', 'Jakarta': 'WHJ', 'Jatim': 'WHS', 'Batam': 'WH Batam', 'Sulawesi': 'WH Sulawesi', 'Sumatera': 'WH Sumatera' };
+    var whLocalLabel = whLabelMap[area] || ('WH ' + area);
 
     var HEADER_BG = '#002A3A';
     var STORE_COL_W = 64;
 
     function storeHeaderCell(label, title) {
-        // Auto-fit width: min 56px; height 90px (was 120 — no group label above means less needed)
-        return '<th style="padding:6px 6px;background:' + HEADER_BG + ';color:rgba(255,255,255,0.9);font-weight:700;font-size:9px;text-align:center;min-width:56px;border-right:1px solid rgba(255,255,255,0.06);height:90px;letter-spacing:0.05em;text-transform:uppercase;white-space:nowrap;position:sticky;top:0;z-index:4;" title="' + _sbaEsc(title) + '"><div style="writing-mode:vertical-rl;transform:rotate(180deg);padding:4px 0;">' + _sbaEsc(label) + '</div></th>';
+        // Fixed-width 56px so tables with few stores don't stretch columns wide.
+        return '<th style="padding:6px 6px;background:' + HEADER_BG + ';color:rgba(255,255,255,0.9);font-weight:700;font-size:9px;text-align:center;min-width:56px;max-width:56px;width:56px;border-right:1px solid rgba(255,255,255,0.06);height:90px;letter-spacing:0.05em;text-transform:uppercase;white-space:nowrap;position:sticky;top:0;z-index:4;" title="' + _sbaEsc(title) + '"><div style="writing-mode:vertical-rl;transform:rotate(180deg);padding:4px 0;">' + _sbaEsc(label) + '</div></th>';
     }
 
     var showTokoCols = showToko ? cols.toko : [];
     var showConsigCols = showConsig ? cols.consig : [];
-    var includeWhCol = showWH && cols.wh.length > 0;
+    // For Jatim: WH local IS WHS — don't render a separate local column (it'd duplicate WHS).
+    var showLocalWh = showWH && (area !== 'Jatim') && cols.whLocal.length > 0;
+    var showWhsCol  = showWH && cols.whS.length > 0;
 
     var VER_W = 46, WH_COL_W = 64;
     var stickyMetaTh = [
@@ -2950,6 +2972,7 @@ function renderStockByArea() {
     for (var mi = 0; mi < stickyMetaTh.length; mi++) { leftOffsets.push(cumL); cumL += stickyMetaTh[mi].w; }
     var VER_LEFT = cumL; cumL += VER_W;
     var WHB_LEFT = cumL;
+    var WHS_LEFT = cumL + (showLocalWh ? WH_COL_W : 0);
 
     var thead = document.getElementById('sbaThead');
     if (thead) {
@@ -2960,8 +2983,11 @@ function renderStockByArea() {
             row1 += '<th style="' + metaStyle + 'text-align:' + m.align + ';min-width:' + m.w + 'px;max-width:' + m.w + 'px;width:' + m.w + 'px;position:sticky;left:' + leftOffsets[idx] + 'px;top:0;z-index:6;">' + m.l + '</th>';
         });
         row1 += '<th style="' + metaStyle + 'text-align:center;position:sticky;top:0;left:' + VER_LEFT + 'px;z-index:6;min-width:' + VER_W + 'px;max-width:' + VER_W + 'px;width:' + VER_W + 'px;">Ver</th>';
-        if (includeWhCol) {
-            row1 += '<th style="' + metaStyle + 'text-align:center;position:sticky;top:0;left:' + WHB_LEFT + 'px;z-index:6;min-width:' + WH_COL_W + 'px;max-width:' + WH_COL_W + 'px;width:' + WH_COL_W + 'px;border-right:2px solid ' + HEADER_BG + ';background:linear-gradient(180deg,' + HEADER_BG + ' 0%,#003c53 100%);color:#00E273;">' + _sbaEsc(whLabel) + '</th>';
+        if (showLocalWh) {
+            row1 += '<th style="' + metaStyle + 'text-align:center;position:sticky;top:0;left:' + WHB_LEFT + 'px;z-index:6;min-width:' + WH_COL_W + 'px;max-width:' + WH_COL_W + 'px;width:' + WH_COL_W + 'px;border-right:1px solid ' + HEADER_BG + ';background:linear-gradient(180deg,' + HEADER_BG + ' 0%,#003c53 100%);color:#00E273;">' + _sbaEsc(whLocalLabel) + '</th>';
+        }
+        if (showWhsCol) {
+            row1 += '<th style="' + metaStyle + 'text-align:center;position:sticky;top:0;left:' + WHS_LEFT + 'px;z-index:6;min-width:' + WH_COL_W + 'px;max-width:' + WH_COL_W + 'px;width:' + WH_COL_W + 'px;border-right:2px solid ' + HEADER_BG + ';background:linear-gradient(180deg,' + HEADER_BG + ' 0%,#003c53 100%);color:#00E273;">WHS</th>';
         }
         // Subtotal columns (Total Toko / Total Consig) — per visible channel group
         var SUBTOTAL_W = 70;
@@ -2974,12 +3000,13 @@ function renderStockByArea() {
         thead.innerHTML = row1;
     }
 
-    var visibleStoreCount = (includeWhCol ? 1 : 0) + showTokoCols.length + showConsigCols.length;
+    var whColCount = (showLocalWh ? 1 : 0) + (showWhsCol ? 1 : 0);
+    var visibleStoreCount = whColCount + showTokoCols.length + showConsigCols.length;
     // + 1 per active subtotal column (Total Toko / Total Consig)
     var subtotalCols = (showTokoCols.length ? 1 : 0) + (showConsigCols.length ? 1 : 0);
     var totalCols = stickyMetaTh.length + 1 + visibleStoreCount + subtotalCols + 1;
     var countEl = document.getElementById('sbaCountInfo');
-    if (countEl) countEl.textContent = filtered.length.toLocaleString('id-ID') + ' SKU · ' + sumQty.toLocaleString('id-ID') + ' qty · ' + visibleStoreCount + ' kolom (1 WH · ' + showTokoCols.length + ' toko · ' + showConsigCols.length + ' consig)';
+    if (countEl) countEl.textContent = filtered.length.toLocaleString('id-ID') + ' SKU · ' + sumQty.toLocaleString('id-ID') + ' qty · ' + visibleStoreCount + ' kolom (' + whColCount + ' WH · ' + showTokoCols.length + ' toko · ' + showConsigCols.length + ' consig)';
 
     var tbody = document.getElementById('sbaTbody');
     if (!tbody) return;
@@ -2992,12 +3019,13 @@ function renderStockByArea() {
 
     function cellQty(q) {
         var c = _sbaCellColor(q);
-        // Auto-fit width: matches header (min 56px, no fixed max)
-        return '<td style="padding:5px 6px;text-align:center;font-weight:600;color:' + c.fg + ';font-size:11px;background:' + c.bg + ';min-width:56px;border-right:1px solid #f1f5f9;border-bottom:1px solid #f1f5f9;font-variant-numeric:tabular-nums;">' + q.toLocaleString('id-ID') + '</td>';
+        // Fixed-width 56px (matches header) so few-store tables stay tight.
+        return '<td style="padding:5px 6px;text-align:center;font-weight:600;color:' + c.fg + ';font-size:11px;background:' + c.bg + ';min-width:56px;max-width:56px;width:56px;border-right:1px solid #f1f5f9;border-bottom:1px solid #f1f5f9;font-variant-numeric:tabular-nums;">' + q.toLocaleString('id-ID') + '</td>';
     }
-    function cellWhAgg(q) {
+    function cellWhAgg(q, leftPx, isLast) {
         var c = _sbaCellColor(q);
-        return '<td style="padding:5px 6px;text-align:center;font-weight:700;color:' + c.fg + ';font-size:11.5px;background:' + c.bg + ';min-width:' + WH_COL_W + 'px;max-width:' + WH_COL_W + 'px;width:' + WH_COL_W + 'px;position:sticky;left:' + WHB_LEFT + 'px;z-index:2;border-right:2px solid #cbd5e1;border-bottom:1px solid #f1f5f9;font-variant-numeric:tabular-nums;">' + q.toLocaleString('id-ID') + '</td>';
+        var br = isLast ? '2px solid #cbd5e1' : '1px solid #cbd5e1';
+        return '<td style="padding:5px 6px;text-align:center;font-weight:700;color:' + c.fg + ';font-size:11.5px;background:' + c.bg + ';min-width:' + WH_COL_W + 'px;max-width:' + WH_COL_W + 'px;width:' + WH_COL_W + 'px;position:sticky;left:' + leftPx + 'px;z-index:2;border-right:' + br + ';border-bottom:1px solid #f1f5f9;font-variant-numeric:tabular-nums;">' + q.toLocaleString('id-ID') + '</td>';
     }
 
     var html = display.map(function(r, idx) {
@@ -3009,8 +3037,10 @@ function renderStockByArea() {
         out += '<td style="padding:6px 8px;color:#1f2937;background:' + rowBg + ';position:sticky;left:' + leftOffsets[2] + 'px;z-index:1;border-right:1px solid #e5e7eb;border-bottom:1px solid #f1f5f9;font-size:11px;min-width:' + stickyMetaTh[2].w + 'px;max-width:' + stickyMetaTh[2].w + 'px;width:' + stickyMetaTh[2].w + 'px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + _sbaEsc(r.name) + '">' + _sbaEsc(r.name) + '</td>';
         out += '<td style="padding:6px 8px;text-align:center;color:#64748b;background:' + rowBg + ';position:sticky;left:' + leftOffsets[3] + 'px;z-index:1;border-right:1px solid #e5e7eb;border-bottom:1px solid #f1f5f9;font-size:11px;min-width:' + stickyMetaTh[3].w + 'px;max-width:' + stickyMetaTh[3].w + 'px;width:' + stickyMetaTh[3].w + 'px;">' + _sbaEsc(r.size) + '</td>';
         out += '<td style="padding:6px 8px;text-align:center;color:#334155;background:' + rowBg + ';position:sticky;left:' + leftOffsets[4] + 'px;z-index:1;border-right:1px solid #e5e7eb;border-bottom:1px solid #f1f5f9;font-size:11px;min-width:' + stickyMetaTh[4].w + 'px;max-width:' + stickyMetaTh[4].w + 'px;width:' + stickyMetaTh[4].w + 'px;">' + _sbaEsc(r.tier || '—') + '</td>';
-        out += '<td style="padding:6px 8px;text-align:center;color:#64748b;background:' + rowBg + ';position:sticky;left:' + VER_LEFT + 'px;z-index:1;border-right:' + (includeWhCol ? '1px solid #e5e7eb' : '2px solid #cbd5e1') + ';border-bottom:1px solid #f1f5f9;font-size:11px;min-width:' + VER_W + 'px;max-width:' + VER_W + 'px;width:' + VER_W + 'px;">' + _sbaEsc(r.version || '—') + '</td>';
-        if (includeWhCol) out += cellWhAgg(r.whQty);
+        var anyWh = showLocalWh || showWhsCol;
+        out += '<td style="padding:6px 8px;text-align:center;color:#64748b;background:' + rowBg + ';position:sticky;left:' + VER_LEFT + 'px;z-index:1;border-right:' + (anyWh ? '1px solid #e5e7eb' : '2px solid #cbd5e1') + ';border-bottom:1px solid #f1f5f9;font-size:11px;min-width:' + VER_W + 'px;max-width:' + VER_W + 'px;width:' + VER_W + 'px;">' + _sbaEsc(r.version || '—') + '</td>';
+        if (showLocalWh) out += cellWhAgg(r.whLocalQty || 0, WHB_LEFT, !showWhsCol);
+        if (showWhsCol)  out += cellWhAgg(r.whSQty || 0, WHS_LEFT, true);
         // Subtotal cells — Total Toko / Total Consig (highlighted, tabular)
         var subTotalCell = function(v) {
             var c = _sbaCellColor(v);
