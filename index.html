@@ -2971,8 +2971,9 @@ function renderStockByArea() {
     var leftOffsets = [], cumL = 0;
     for (var mi = 0; mi < stickyMetaTh.length; mi++) { leftOffsets.push(cumL); cumL += stickyMetaTh[mi].w; }
     var VER_LEFT = cumL; cumL += VER_W;
-    var WHB_LEFT = cumL;
-    var WHS_LEFT = cumL + (showLocalWh ? WH_COL_W : 0);
+    // WHS comes BEFORE local WH (WHB/WHJ/etc).
+    var WHS_LEFT = cumL;
+    var WHB_LEFT = cumL + (showWhsCol ? WH_COL_W : 0);
 
     var thead = document.getElementById('sbaThead');
     if (thead) {
@@ -2983,11 +2984,12 @@ function renderStockByArea() {
             row1 += '<th style="' + metaStyle + 'text-align:' + m.align + ';min-width:' + m.w + 'px;max-width:' + m.w + 'px;width:' + m.w + 'px;position:sticky;left:' + leftOffsets[idx] + 'px;top:0;z-index:6;">' + m.l + '</th>';
         });
         row1 += '<th style="' + metaStyle + 'text-align:center;position:sticky;top:0;left:' + VER_LEFT + 'px;z-index:6;min-width:' + VER_W + 'px;max-width:' + VER_W + 'px;width:' + VER_W + 'px;">Ver</th>';
-        if (showLocalWh) {
-            row1 += '<th style="' + metaStyle + 'text-align:center;position:sticky;top:0;left:' + WHB_LEFT + 'px;z-index:6;min-width:' + WH_COL_W + 'px;max-width:' + WH_COL_W + 'px;width:' + WH_COL_W + 'px;border-right:1px solid ' + HEADER_BG + ';background:linear-gradient(180deg,' + HEADER_BG + ' 0%,#003c53 100%);color:#00E273;">' + _sbaEsc(whLocalLabel) + '</th>';
-        }
         if (showWhsCol) {
-            row1 += '<th style="' + metaStyle + 'text-align:center;position:sticky;top:0;left:' + WHS_LEFT + 'px;z-index:6;min-width:' + WH_COL_W + 'px;max-width:' + WH_COL_W + 'px;width:' + WH_COL_W + 'px;border-right:2px solid ' + HEADER_BG + ';background:linear-gradient(180deg,' + HEADER_BG + ' 0%,#003c53 100%);color:#00E273;">WHS</th>';
+            var whsBr = showLocalWh ? '1px' : '2px';
+            row1 += '<th style="' + metaStyle + 'text-align:center;position:sticky;top:0;left:' + WHS_LEFT + 'px;z-index:6;min-width:' + WH_COL_W + 'px;max-width:' + WH_COL_W + 'px;width:' + WH_COL_W + 'px;border-right:' + whsBr + ' solid ' + HEADER_BG + ';background:linear-gradient(180deg,' + HEADER_BG + ' 0%,#003c53 100%);color:#00E273;">WHS</th>';
+        }
+        if (showLocalWh) {
+            row1 += '<th style="' + metaStyle + 'text-align:center;position:sticky;top:0;left:' + WHB_LEFT + 'px;z-index:6;min-width:' + WH_COL_W + 'px;max-width:' + WH_COL_W + 'px;width:' + WH_COL_W + 'px;border-right:2px solid ' + HEADER_BG + ';background:linear-gradient(180deg,' + HEADER_BG + ' 0%,#003c53 100%);color:#00E273;">' + _sbaEsc(whLocalLabel) + '</th>';
         }
         // Subtotal columns (Total Toko / Total Consig) — per visible channel group
         var SUBTOTAL_W = 70;
@@ -3039,8 +3041,8 @@ function renderStockByArea() {
         out += '<td style="padding:6px 8px;text-align:center;color:#334155;background:' + rowBg + ';position:sticky;left:' + leftOffsets[4] + 'px;z-index:1;border-right:1px solid #e5e7eb;border-bottom:1px solid #f1f5f9;font-size:11px;min-width:' + stickyMetaTh[4].w + 'px;max-width:' + stickyMetaTh[4].w + 'px;width:' + stickyMetaTh[4].w + 'px;">' + _sbaEsc(r.tier || '—') + '</td>';
         var anyWh = showLocalWh || showWhsCol;
         out += '<td style="padding:6px 8px;text-align:center;color:#64748b;background:' + rowBg + ';position:sticky;left:' + VER_LEFT + 'px;z-index:1;border-right:' + (anyWh ? '1px solid #e5e7eb' : '2px solid #cbd5e1') + ';border-bottom:1px solid #f1f5f9;font-size:11px;min-width:' + VER_W + 'px;max-width:' + VER_W + 'px;width:' + VER_W + 'px;">' + _sbaEsc(r.version || '—') + '</td>';
-        if (showLocalWh) out += cellWhAgg(r.whLocalQty || 0, WHB_LEFT, !showWhsCol);
-        if (showWhsCol)  out += cellWhAgg(r.whSQty || 0, WHS_LEFT, true);
+        if (showWhsCol)  out += cellWhAgg(r.whSQty || 0, WHS_LEFT, !showLocalWh);
+        if (showLocalWh) out += cellWhAgg(r.whLocalQty || 0, WHB_LEFT, true);
         // Subtotal cells — Total Toko / Total Consig (highlighted, tabular)
         var subTotalCell = function(v) {
             var c = _sbaCellColor(v);
