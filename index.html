@@ -4442,6 +4442,173 @@ function invExportContextual() {
     return exportStockOnHand('retail', ent); // default / channel=retail
 }
 
+// === Stock Control: kode-level breakdown modal (per gudang × entity) ===
+// Triggered by clicking a kode_kecil cell in Stock Control kodeKecil view mode.
+function scShowKodeBreakdown(kode) {
+    var kodeUp = String(kode || '').toUpperCase();
+    if (!kodeUp) return;
+
+    // Build pivot: agg[tipe||lokasi||size] = { tipe, lokasi, size, DDD, MBB, UBB, LJBB, CONSIG }
+    var agg = {};
+    var rowName = '';
+    function getRow(tipe, lokasi, size) {
+        var key = tipe + '||' + lokasi + '||' + size;
+        if (!agg[key]) agg[key] = { tipe: tipe, lokasi: lokasi, size: size || '', DDD: 0, MBB: 0, UBB: 0, LJBB: 0, CONSIG: 0 };
+        return agg[key];
+    }
+
+    // Warehouse rows
+    ['DDD','LJBB','MBB','UBB'].forEach(function(ent) {
+        var ed = (typeof allData !== 'undefined' && allData[ent]) ? allData[ent] : {};
+        (ed.warehouse || []).forEach(function(it) {
+            if (String(it.kode || '').toUpperCase() !== kodeUp) return;
+            if (!rowName) rowName = it.name || '';
+            var ss = it.store_stock || {};
+            Object.keys(ss).forEach(function(wh) {
+                var qty = Number(ss[wh]) || 0;
+                if (!qty) return;
+                getRow('Warehouse', wh, it.size || '')[ent] += qty;
+            });
+        });
+    });
+    // Retail rows (skip locations with "warehouse" in name — those are double-counted under WH)
+    ['DDD','MBB','UBB'].forEach(function(ent) {
+        var ed = (typeof allData !== 'undefined' && allData[ent]) ? allData[ent] : {};
+        (ed.retail || []).forEach(function(it) {
+            if (String(it.kode || '').toUpperCase() !== kodeUp) return;
+            if (!rowName) rowName = it.name || '';
+            var ss = it.store_stock || {};
+            Object.keys(ss).forEach(function(s) {
+                if (String(s).toLowerCase().indexOf('warehouse') !== -1) return;
+                var qty = Number(ss[s]) || 0;
+                if (!qty) return;
+                getRow('Retail', s, it.size || '')[ent] += qty;
+            });
+        });
+    });
+    // Consignment (no entity attribution — bucket as CONSIG)
+    var consigArr = (typeof consignmentStockItems !== 'undefined') ? consignmentStockItems : [];
+    consigArr.forEach(function(it) {
+        if (String(it.kode || '').toUpperCase() !== kodeUp) return;
+        if (!rowName) rowName = it.name || '';
+        var ss = it.store_stock || {};
+        Object.keys(ss).forEach(function(s) {
+            var qty = Number(ss[s]) || 0;
+            if (!qty) return;
+            getRow('Konsinyasi', s, it.size || '').CONSIG += qty;
+        });
+    });
+
+    var rows = Object.values(agg).map(function(r){
+        r.total = r.DDD + r.MBB + r.UBB + r.LJBB + r.CONSIG;
+        return r;
+    }).filter(function(r){ return r.total !== 0; });
+
+    var tipeOrder = { 'Warehouse': 1, 'Retail': 2, 'Konsinyasi': 3 };
+    rows.sort(function(a,b){
+        var ta = tipeOrder[a.tipe] || 9, tb = tipeOrder[b.tipe] || 9;
+        if (ta !== tb) return ta - tb;
+        if (a.lokasi !== b.lokasi) return a.lokasi.localeCompare(b.lokasi);
+        return (a.size || '').localeCompare(b.size || '');
+    });
+
+    var modal = document.getElementById('kodeBreakdownModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'kodeBreakdownModal';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,42,58,0.55);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px;';
+        modal.innerHTML = '<div style="background:var(--card);max-width:1100px;width:100%;max-height:85vh;border-radius:var(--radius);box-shadow:0 10px 40px rgba(0,0,0,0.2);display:flex;flex-direction:column;overflow:hidden;">' +
+            '<div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--navy);color:#fff;">' +
+            '<div><div style="font-size:11px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;">Stok Breakdown — Gudang × Entity</div><div id="kbModalTitle" style="font-size:13px;margin-top:4px;font-family:ui-monospace,monospace;">—</div></div>' +
+            '<button onclick="closeKodeBreakdown()" style="background:transparent;border:none;color:#fff;font-size:18px;cursor:pointer;padding:4px 10px;">✕</button>' +
+            '</div>' +
+            '<div id="kbModalBody" style="flex:1;overflow:auto;padding:0;"></div>' +
+            '<div style="padding:8px 14px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">' +
+            '<div id="kbModalMeta" style="font-size:11px;color:var(--fg-soft);">—</div>' +
+            '<button class="btn btn-primary" onclick="exportKodeBreakdownCSV()">📥 Export CSV</button>' +
+            '</div></div>';
+        document.body.appendChild(modal);
+        modal.addEventListener('click', function(e){ if (e.target === modal) closeKodeBreakdown(); });
+    }
+    modal.style.display = 'flex';
+    modal._rows = rows;
+    modal._kode = kodeUp;
+    modal._name = rowName;
+
+    var titleEl = document.getElementById('kbModalTitle');
+    if (titleEl) titleEl.textContent = kodeUp + (rowName ? '  —  ' + rowName : '');
+
+    var totalAll = rows.reduce(function(s,r){ return s + r.total; }, 0);
+    var metaEl = document.getElementById('kbModalMeta');
+    if (metaEl) metaEl.textContent = fmt(rows.length) + ' baris · Total ' + fmt(totalAll) + ' pairs';
+
+    var body = document.getElementById('kbModalBody');
+    if (!body) return;
+    if (!rows.length) {
+        body.innerHTML = '<div style="padding:40px;text-align:center;color:var(--fg-soft);">Tidak ada data untuk ' + esc(kodeUp) + '</div>';
+        return;
+    }
+
+    // Show only entity columns that have non-zero data
+    var allEntCols = ['DDD','LJBB','MBB','UBB','CONSIG'];
+    var entCols = allEntCols.filter(function(e){
+        return rows.some(function(r){ return (r[e] || 0) !== 0; });
+    });
+
+    var html = '<table class="data" style="width:100%;font-size:12px;">' +
+        '<thead><tr>' +
+        '<th>Tipe</th><th>Lokasi</th><th class="center">Size</th>';
+    entCols.forEach(function(e){
+        html += '<th class="center">' + (e === 'CONSIG' ? 'Konsinyasi' : e) + '</th>';
+    });
+    html += '<th class="center" style="background:rgba(212,162,76,0.18);color:var(--navy);">TOTAL</th></tr></thead><tbody>';
+
+    var lastTipe = null;
+    rows.forEach(function(r){
+        var sep = (lastTipe && lastTipe !== r.tipe) ? 'border-top:2px solid var(--border);' : '';
+        lastTipe = r.tipe;
+        var tipeBadge = r.tipe === 'Warehouse' ? '#0ea5e9' : (r.tipe === 'Retail' ? '#16a34a' : '#a855f7');
+        html += '<tr style="' + sep + '">' +
+            '<td><span style="display:inline-block;padding:2px 8px;border-radius:3px;background:' + tipeBadge + ';color:#fff;font-size:10px;font-weight:700;">' + esc(r.tipe) + '</span></td>' +
+            '<td>' + esc(r.lokasi) + '</td>' +
+            '<td class="center" style="font-family:ui-monospace,monospace;font-size:11px;">' + esc(r.size || '—') + '</td>';
+        entCols.forEach(function(e){
+            var v = r[e] || 0;
+            var cls = v < 0 ? 'color:#ef4444;font-weight:700;' : (v === 0 ? 'color:var(--fg-soft);' : '');
+            html += '<td class="center" style="' + cls + 'font-variant-numeric:tabular-nums;">' + (v === 0 ? '—' : fmt(v)) + '</td>';
+        });
+        var tCls = r.total < 0 ? 'color:#ef4444;font-weight:700;' : 'font-weight:700;color:var(--navy);';
+        html += '<td class="center" style="' + tCls + 'font-variant-numeric:tabular-nums;background:rgba(212,162,76,0.08);">' + fmt(r.total) + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    body.innerHTML = html;
+}
+
+function closeKodeBreakdown() {
+    var m = document.getElementById('kodeBreakdownModal');
+    if (m) m.style.display = 'none';
+}
+
+function exportKodeBreakdownCSV() {
+    var m = document.getElementById('kodeBreakdownModal');
+    var rows = (m && m._rows) || [];
+    if (!rows.length) { alert('Tidak ada data'); return; }
+    var allEntCols = ['DDD','LJBB','MBB','UBB','CONSIG'];
+    var entCols = allEntCols.filter(function(e){ return rows.some(function(r){ return (r[e] || 0) !== 0; }); });
+    function escv(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
+    var headers = ['Tipe','Lokasi','Size'].concat(entCols.map(function(e){ return e === 'CONSIG' ? 'Konsinyasi' : e; })).concat(['Total']);
+    var out = [headers.map(escv).join(',')];
+    rows.forEach(function(r) {
+        var line = [r.tipe, r.lokasi, r.size || ''].concat(entCols.map(function(e){ return r[e] || 0; })).concat([r.total]);
+        out.push(line.map(escv).join(','));
+    });
+    var blob = new Blob(['﻿' + out.join('\n')], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'breakdown_' + (m._kode || 'kode') + '_' + new Date().toISOString().slice(0,10) + '.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
 // Update the Export button label (e.g. "Retail DDD", "WH MBB", "Consig UBB") to show
 // which file will download — reads gf.channel + currentEntity.
 function invRefreshExportLabel() {
@@ -4860,8 +5027,9 @@ function scRender() {
                     firstCols = '<td style="font-family:ui-monospace,monospace;">' + esc(String(r.kode_kecil).toUpperCase()) + '</td>' +
                                 '<td class="center" style="font-family:ui-monospace,monospace;">' + esc(r.size || '—') + '</td>';
                 } else {
-                    // KodeKecil mode = article-level code (no size)
-                    firstCols = '<td style="font-family:ui-monospace,monospace;">' + esc(String(r.kode).toUpperCase()) + '</td>';
+                    // KodeKecil mode = article-level code (no size) — clickable to show breakdown
+                    var kodeUp = String(r.kode).toUpperCase();
+                    firstCols = '<td style="font-family:ui-monospace,monospace;cursor:pointer;color:var(--navy);text-decoration:underline;text-decoration-color:rgba(0,42,58,0.35);text-underline-offset:2px;" onclick="scShowKodeBreakdown(&apos;' + kodeUp + '&apos;)" title="Klik untuk lihat breakdown stok per gudang & entity">' + esc(kodeUp) + '</td>';
                 }
                 return '<tr>' +
                     firstCols +
@@ -5258,7 +5426,8 @@ function scoRender() {
                     firstCols = '<td style="font-family:ui-monospace,monospace;">' + esc(String(r.kode_kecil).toUpperCase()) + '</td>' +
                                 '<td class="center" style="font-family:ui-monospace,monospace;">' + esc(r.size || '—') + '</td>';
                 } else {
-                    firstCols = '<td style="font-family:ui-monospace,monospace;">' + esc(String(r.kode).toUpperCase()) + '</td>';
+                    var kodeUpO = String(r.kode).toUpperCase();
+                    firstCols = '<td style="font-family:ui-monospace,monospace;cursor:pointer;color:var(--navy);text-decoration:underline;text-decoration-color:rgba(0,42,58,0.35);text-underline-offset:2px;" onclick="scShowKodeBreakdown(&apos;' + kodeUpO + '&apos;)" title="Klik untuk lihat breakdown stok per gudang & entity">' + esc(kodeUpO) + '</td>';
                 }
                 return '<tr>' +
                     firstCols +
