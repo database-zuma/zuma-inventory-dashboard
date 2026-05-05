@@ -4561,7 +4561,34 @@ function invExportContextual() {
 function scShowKodeBreakdown(kode, mode) {
     var kodeUp = String(kode || '').toUpperCase();
     if (!kodeUp) return;
-    mode = (mode === 'online') ? 'online' : 'retail';
+    // Modes: 'retail' (legacy: WH non-online + retail + consig) | 'online' (online WH only)
+    //        'whs' | 'whb' | 'whj' | 'whob' | 'whoj' (specific WH only)
+    //        'wh' (all WH including online — for STOK WH cell click)
+    //        'retail-only' (retail toko only — for STOK RETAIL cell click)
+    //        'consig' (consignment only — for STOK CONSI cell click)
+    //        'global' (everything — for STOK GLOBAL cell click)
+    mode = String(mode || 'retail').toLowerCase();
+
+    function whInScope(whName) {
+        var wl = String(whName || '').toLowerCase();
+        var isOnline = wl.indexOf('online') !== -1;
+        var isBali   = wl.indexOf('bali') !== -1 || wl.indexOf('gatsu') !== -1;
+        var isJkt    = wl.indexOf('jakarta') !== -1 || wl.indexOf('pluit') !== -1 || wl.indexOf('jkt') !== -1;
+        var isPusat  = wl.indexOf('pusat') !== -1 || wl.indexOf('surabaya') !== -1;
+        if (mode === 'whs') return !isOnline && isPusat;
+        if (mode === 'whb') return !isOnline && isBali;
+        if (mode === 'whj') return !isOnline && isJkt;
+        if (mode === 'whob') return isOnline && isBali;
+        if (mode === 'whoj') return isOnline && isJkt;
+        if (mode === 'wh' || mode === 'whtotal') return !isOnline; // WH TOTAL = land WH only (Pusat+Bali+Jkt)
+        if (mode === 'online') return isOnline;
+        if (mode === 'global') return true; // include all WH
+        if (mode === 'retail-only' || mode === 'consig') return false; // skip all WH
+        // 'retail' (legacy default) — non-online WH
+        return !isOnline;
+    }
+    var includeRetail = (mode === 'retail' || mode === 'retail-only' || mode === 'global');
+    var includeConsig = (mode === 'retail' || mode === 'consig' || mode === 'global');
 
     // Build pivot: agg[tipe||lokasi||size] = { tipe, lokasi, size, DDD, MBB, UBB, LJBB, CONSIG }
     var agg = {};
@@ -4572,7 +4599,7 @@ function scShowKodeBreakdown(kode, mode) {
         return agg[key];
     }
 
-    // Warehouse rows. Online mode keeps only "warehouse online …", Retail mode skips them.
+    // Warehouse rows — filtered by whInScope per mode
     ['DDD','LJBB','MBB','UBB'].forEach(function(ent) {
         var ed = (typeof allData !== 'undefined' && allData[ent]) ? allData[ent] : {};
         (ed.warehouse || []).forEach(function(it) {
@@ -4582,16 +4609,15 @@ function scShowKodeBreakdown(kode, mode) {
             Object.keys(ss).forEach(function(wh) {
                 var qty = Number(ss[wh]) || 0;
                 if (!qty) return;
+                if (!whInScope(wh)) return;
                 var isOnlineWh = String(wh).toLowerCase().indexOf('online') !== -1;
-                if (mode === 'online' && !isOnlineWh) return;
-                if (mode === 'retail' && isOnlineWh) return;
-                var label = (mode === 'online') ? 'WH Online' : 'Warehouse';
+                var label = isOnlineWh ? 'WH Online' : 'Warehouse';
                 getRow(label, wh, it.size || '')[ent] += qty;
             });
         });
     });
-    // Retail + Konsinyasi only shown in retail mode (Online sub-tab is WH-only).
-    if (mode === 'retail') {
+    // Retail toko rows
+    if (includeRetail) {
         ['DDD','MBB','UBB'].forEach(function(ent) {
             var ed = (typeof allData !== 'undefined' && allData[ent]) ? allData[ent] : {};
             (ed.retail || []).forEach(function(it) {
@@ -4606,6 +4632,9 @@ function scShowKodeBreakdown(kode, mode) {
                 });
             });
         });
+    }
+    // Konsinyasi rows
+    if (includeConsig) {
         var consigArr = (typeof consignmentStockItems !== 'undefined') ? consignmentStockItems : [];
         consigArr.forEach(function(it) {
             if (String(it.kode || '').toUpperCase() !== kodeUp) return;
@@ -5159,11 +5188,12 @@ function scRender() {
                 var twCls  = noSales ? 'color:var(--fg-soft);' : (r.tw < 2 ? 'color:#dc2626;' : (r.tw < 4 ? 'color:#d97706;' : 'color:#16a34a;'));
                 var toCls  = noSales ? 'color:var(--fg-soft);' : (r.to < 1 ? 'color:#dc2626;' : (r.to < 2 ? 'color:#d97706;' : 'color:#16a34a;'));
                 var rowKodeUpper = String(r.kode || r.kode_kecil || '').toUpperCase();
-                function stkCell(v, highlight) {
+                function stkCell(v, highlight, cellMode) {
                     var bg = highlight ? 'background:var(--navy-soft);' : '';
                     var cls = v < 0 ? 'color:#ef4444;' : (v === 0 ? 'color:var(--fg-soft);' : '');
                     if (rowKodeUpper && v !== 0) {
-                        return '<td class="center" onclick="scShowKodeBreakdown(\'' + rowKodeUpper + '\',\'retail\')" title="Klik buat lihat breakdown stok per gudang & entitas" style="' + cls + bg + 'font-variant-numeric:tabular-nums;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;">' + fmt(v) + '</td>';
+                        var mode = cellMode || 'global';
+                        return '<td class="center" onclick="scShowKodeBreakdown(\'' + rowKodeUpper + '\',\'' + mode + '\')" title="Klik buat lihat breakdown stok ' + mode + '" style="' + cls + bg + 'font-variant-numeric:tabular-nums;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;">' + fmt(v) + '</td>';
                     }
                     return '<td class="center" style="' + cls + bg + 'font-variant-numeric:tabular-nums;">' + fmt(v) + '</td>';
                 }
@@ -5185,10 +5215,10 @@ function scRender() {
                     '<td class="center">' + esc(r.tier || '—') + '</td>' +
                     salesCells +
                     '<td class="center" style="color:var(--gold);background:rgba(212,162,76,0.18);font-variant-numeric:tabular-nums;">' + r.avgMonthly.toFixed(1) + '</td>' +
-                    stkCell(r.WHS) + stkCell(r.WHB) + stkCell(r.WHJ) +
-                    stkCell(r.WHOB) + stkCell(r.WHOJ) +
-                    stkCell(r.whTotal, true) +
-                    stkCell(r.stokRetail, true) + stkCell(r.stokConsig, true) + stkCell(r.globalStock, true) +
+                    stkCell(r.WHS, false, 'whs') + stkCell(r.WHB, false, 'whb') + stkCell(r.WHJ, false, 'whj') +
+                    stkCell(r.WHOB, false, 'whob') + stkCell(r.WHOJ, false, 'whoj') +
+                    stkCell(r.whTotal, true, 'wh') +
+                    stkCell(r.stokRetail, true, 'retail-only') + stkCell(r.stokConsig, true, 'consig') + stkCell(r.globalStock, true, 'global') +
                     '<td class="center" style="' + gapCls + gapBg + 'font-variant-numeric:tabular-nums;">' + fmt(Math.round(r.gap)) + '</td>' +
                     '<td class="center" style="' + twCls  + twBg  + 'font-variant-numeric:tabular-nums;">' + (r.tw >= 999 ? '0.0' : r.tw.toFixed(1)) + '</td>' +
                     '<td class="center" style="' + toCls  + toBg  + 'font-variant-numeric:tabular-nums;">' + (r.to >= 999 ? '0.0' : r.to.toFixed(1)) + '</td>' +
