@@ -1691,6 +1691,21 @@ async function loadAllData() {
         }).catch(function(e){ console.warn('SC aggregate fetch:', e); });
     });
 
+    // Stock Control: refetch sales aggregate filtered by area (used when gf.area changes)
+    window._scRefetchSalesByArea = function(area) {
+        var qs = area ? ('?area=' + encodeURIComponent(area)) : '';
+        return Promise.all([
+            fetchAPI('/api/sales/aggregate' + qs).catch(function(){ return {}; }),
+            fetchAPI('/api/sales/aggregate-online' + qs).catch(function(){ return {}; })
+        ]).then(function(res) {
+            window.scSalesMap = { retail: res[0] || {}, online: res[1] || {} };
+            if (activeTab === 'stockcontrol') {
+                if (scSubTab === 'online' && typeof scoRender === 'function') scoRender();
+                else if (typeof scRender === 'function') scRender();
+            }
+        });
+    };
+
     // Assortment — Stock On-Hand export only (lightweight)
     if (!window._assortLoading) {
         window._assortLoading = swrGet('/api/assortment').then(function(cached) {
@@ -4809,7 +4824,37 @@ function scRender() {
         return byKK[key];
     }
 
-    // Aggregate warehouse (DDD+LJBB+MBB+UBB)
+    // Stock Control area filter: respect global filter (gf.area). Lombok merged into Bali.
+    // classifyWhArea returns 'WHB'|'WHJ'|'WHS'|'WHOB'|'WHOJ'. Map area filter to WH codes.
+    var scAreaFilter = (typeof gf !== 'undefined' && gf.area) ? gf.area : '';
+    function _scAreaWHCode(a) {
+        if (a === 'Bali') return 'WHB';
+        if (a === 'Jakarta') return 'WHJ';
+        if (a === 'Jawa Timur' || a === 'Jatim') return 'WHS';
+        return null; // Batam/Sulawesi/Sumatera/Lombok have no own warehouse
+    }
+    function _scStoreInArea(store, a) {
+        if (!a) return true;
+        var sa = (typeof getAreaFromStore === 'function') ? getAreaFromStore(store) : '';
+        if (sa === 'Lombok') sa = 'Bali'; // Stock Control: Lombok ikut Bali
+        return sa === a;
+    }
+    function _scConsigStoreInArea(store, a) {
+        if (!a) return true;
+        var s = String(store || '').toLowerCase();
+        // Bali (includes Pepito Lombok merged → Bali)
+        if (a === 'Bali') return s.indexOf('pepito') !== -1 || s.indexOf('royal surf') !== -1
+            || s.indexOf('bintang') !== -1 || s.indexOf('clandy') !== -1 || s.indexOf('padma') !== -1
+            || s.indexOf('bali united') !== -1 || s.indexOf('sogo') !== -1;
+        if (a === 'Jakarta') return s.indexOf('aeon') !== -1 || s.indexOf('grand lucky') !== -1
+            || s.indexOf('grandlucky') !== -1 || s.indexOf('omosando') !== -1
+            || s.indexOf('pavels') !== -1 || s.indexOf('paveels') !== -1 || s.indexOf('sonobebe') !== -1;
+        if (a === 'Jawa Timur' || a === 'Jatim') return s.indexOf('cilubaa') !== -1 || s.indexOf('cilukba') !== -1;
+        return false;
+    }
+
+    // Aggregate warehouse (DDD+LJBB+MBB+UBB) — area-scoped if filter set
+    var scAreaWHcode = _scAreaWHCode(scAreaFilter);
     ['DDD','LJBB','MBB','UBB'].forEach(function(ent) {
         var ed = (allData || {})[ent] || {};
         (ed.warehouse || []).forEach(function(it) {
@@ -4818,12 +4863,14 @@ function scRender() {
             Object.keys(it.store_stock).forEach(function(wh) {
                 var c = classifyWhArea(wh);
                 if (!c) return;
+                // Area filter: only count WH matching selected area (skip if no WH for that area)
+                if (scAreaFilter && c !== scAreaWHcode) return;
                 var qty = Number(it.store_stock[wh]) || 0;
                 row[c] += qty;
             });
         });
     });
-    // Aggregate retail (DDD only has retail in practice)
+    // Aggregate retail (DDD only has retail in practice) — area-scoped if filter set
     ['DDD','MBB','UBB'].forEach(function(ent) {
         var ed = (allData || {})[ent] || {};
         (ed.retail || []).forEach(function(it) {
@@ -4832,15 +4879,19 @@ function scRender() {
             Object.keys(it.store_stock).forEach(function(s) {
                 var sl = s.toLowerCase();
                 if (sl.indexOf('warehouse') !== -1) return;
+                if (scAreaFilter && !_scStoreInArea(s, scAreaFilter)) return;
                 row.stokRetail += Number(it.store_stock[s]) || 0;
             });
         });
     });
-    // Aggregate consignment (across all entities in consignmentStockItems)
+    // Aggregate consignment (across all entities) — area-scoped if filter set
     (typeof consignmentStockItems !== 'undefined' ? consignmentStockItems : []).forEach(function(it) {
         var row = ensureRow(it); if (!row) return;
         if (!it.store_stock) return;
-        Object.values(it.store_stock).forEach(function(v){ row.stokConsig += Number(v) || 0; });
+        Object.keys(it.store_stock).forEach(function(s) {
+            if (scAreaFilter && !_scConsigStoreInArea(s, scAreaFilter)) return;
+            row.stokConsig += Number(it.store_stock[s]) || 0;
+        });
     });
 
     // Compute derived fields per row. Retail sub-tab's Stok Global excludes WH Online
@@ -4941,10 +4992,18 @@ function scRender() {
             var wl = wh.toLowerCase();
             var qty = Number(it.store_stock[wh]) || 0;
             // ONLINE matches must come BEFORE the bali/jakarta catch-alls
-            if (wl.indexOf('online') !== -1 && (wl.indexOf('bali') !== -1 || wl.indexOf('jakarta') !== -1 || wl.indexOf('jkt') !== -1)) aggOnline += qty;
-            else if (wl.indexOf('bali') !== -1 || wl.indexOf('gatsu') !== -1) aggWH['Bali'] += qty;
-            else if (wl.indexOf('jakarta') !== -1 || wl.indexOf('pluit') !== -1) aggWH['Jakarta'] += qty;
-            else if (wl.indexOf('pusat') !== -1 || wl.indexOf('surabaya') !== -1) aggWH['Jawa Timur'] += qty;
+            if (wl.indexOf('online') !== -1 && (wl.indexOf('bali') !== -1 || wl.indexOf('jakarta') !== -1 || wl.indexOf('jkt') !== -1)) {
+                if (!scAreaFilter) aggOnline += qty;
+            }
+            else if (wl.indexOf('bali') !== -1 || wl.indexOf('gatsu') !== -1) {
+                if (!scAreaFilter || scAreaFilter === 'Bali') aggWH['Bali'] += qty;
+            }
+            else if (wl.indexOf('jakarta') !== -1 || wl.indexOf('pluit') !== -1) {
+                if (!scAreaFilter || scAreaFilter === 'Jakarta') aggWH['Jakarta'] += qty;
+            }
+            else if (wl.indexOf('pusat') !== -1 || wl.indexOf('surabaya') !== -1) {
+                if (!scAreaFilter || scAreaFilter === 'Jawa Timur' || scAreaFilter === 'Jatim') aggWH['Jawa Timur'] += qty;
+            }
         });
     });
     (entData.retail || []).forEach(function(it) {
@@ -4952,13 +5011,17 @@ function scRender() {
         Object.keys(it.store_stock).forEach(function(s) {
             var sl = s.toLowerCase();
             if (sl.indexOf('warehouse') !== -1) return;
+            if (scAreaFilter && !_scStoreInArea(s, scAreaFilter)) return;
             aggRetail += Number(it.store_stock[s]) || 0;
         });
     });
     (typeof consignmentStockItems !== 'undefined' ? consignmentStockItems : []).forEach(function(it){
         if (String(it.entity || '').toUpperCase() !== ent.toUpperCase()) return;
         if (!it.store_stock) return;
-        Object.values(it.store_stock).forEach(function(v){ aggConsig += Number(v) || 0; });
+        Object.keys(it.store_stock).forEach(function(s) {
+            if (scAreaFilter && !_scConsigStoreInArea(s, scAreaFilter)) return;
+            aggConsig += Number(it.store_stock[s]) || 0;
+        });
     });
     // Retail Stok Global excludes aggOnline — Online has its own sub-tab
     var aggGlobal = aggWH['Jawa Timur'] + aggWH['Bali'] + aggWH['Jakarta'] + aggRetail + aggConsig;
@@ -5575,6 +5638,10 @@ function gfOnChange(field) {
         gfPopulateStoreDropdown();
         gf.store = '';
         var s = document.getElementById('gfStore'); if (s) s.value = '';
+        // Stock Control: refetch sales aggregate scoped to selected area
+        if (activeTab === 'stockcontrol' && typeof window._scRefetchSalesByArea === 'function') {
+            window._scRefetchSalesByArea(gf.area);
+        }
     }
     gfDispatchToActiveTab();
 }
@@ -5590,6 +5657,9 @@ function gfReset() {
         if (el) el.value = ids[k];
     });
     gfPopulateDependentFilters();
+    if (activeTab === 'stockcontrol' && typeof window._scRefetchSalesByArea === 'function') {
+        window._scRefetchSalesByArea('');
+    }
     gfDispatchToActiveTab();
 }
 
