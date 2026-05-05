@@ -4590,20 +4590,28 @@ function scShowKodeBreakdown(kode, mode) {
     var includeRetail = (mode === 'retail' || mode === 'retail-only' || mode === 'global');
     var includeConsig = (mode === 'retail' || mode === 'consig' || mode === 'global');
 
-    // Build pivot: agg[tipe||lokasi||size] = { tipe, lokasi, size, DDD, MBB, UBB, LJBB, CONSIG }
+    // Build pivot: agg[tipe||lokasi||kode_kecil] = { tipe, lokasi, kode_kecil, size, DDD, MBB, UBB, LJBB, CONSIG }
+    // kode_kecil = per-size SKU code (e.g., M1SPV213Z42); when SKU view mode user clicked, kode = kode_kecil already
     var agg = {};
     var rowName = '';
-    function getRow(tipe, lokasi, size) {
-        var key = tipe + '||' + lokasi + '||' + size;
-        if (!agg[key]) agg[key] = { tipe: tipe, lokasi: lokasi, size: size || '', DDD: 0, MBB: 0, UBB: 0, LJBB: 0, CONSIG: 0 };
+    function getRow(tipe, lokasi, kodeKecil, size) {
+        var kk = (kodeKecil || '').toUpperCase();
+        var key = tipe + '||' + lokasi + '||' + kk;
+        if (!agg[key]) agg[key] = { tipe: tipe, lokasi: lokasi, kodeKecil: kk, size: size || '', DDD: 0, MBB: 0, UBB: 0, LJBB: 0, CONSIG: 0 };
         return agg[key];
     }
 
     // Warehouse rows — filtered by whInScope per mode
+    // Match by kode (article) OR kode_kecil (per-size SKU) — supports both view modes
+    function itemMatchesClicked(it) {
+        var k1 = String(it.kode || '').toUpperCase();
+        var k2 = String(it.kode_kecil || '').toUpperCase();
+        return k1 === kodeUp || k2 === kodeUp;
+    }
     ['DDD','LJBB','MBB','UBB'].forEach(function(ent) {
         var ed = (typeof allData !== 'undefined' && allData[ent]) ? allData[ent] : {};
         (ed.warehouse || []).forEach(function(it) {
-            if (String(it.kode || '').toUpperCase() !== kodeUp) return;
+            if (!itemMatchesClicked(it)) return;
             if (!rowName) rowName = it.name || '';
             var ss = it.store_stock || {};
             Object.keys(ss).forEach(function(wh) {
@@ -4612,7 +4620,7 @@ function scShowKodeBreakdown(kode, mode) {
                 if (!whInScope(wh)) return;
                 var isOnlineWh = String(wh).toLowerCase().indexOf('online') !== -1;
                 var label = isOnlineWh ? 'WH Online' : 'Warehouse';
-                getRow(label, wh, it.size || '')[ent] += qty;
+                getRow(label, wh, it.kode_kecil, it.size || '')[ent] += qty;
             });
         });
     });
@@ -4621,14 +4629,14 @@ function scShowKodeBreakdown(kode, mode) {
         ['DDD','MBB','UBB'].forEach(function(ent) {
             var ed = (typeof allData !== 'undefined' && allData[ent]) ? allData[ent] : {};
             (ed.retail || []).forEach(function(it) {
-                if (String(it.kode || '').toUpperCase() !== kodeUp) return;
+                if (!itemMatchesClicked(it)) return;
                 if (!rowName) rowName = it.name || '';
                 var ss = it.store_stock || {};
                 Object.keys(ss).forEach(function(s) {
                     if (String(s).toLowerCase().indexOf('warehouse') !== -1) return;
                     var qty = Number(ss[s]) || 0;
                     if (!qty) return;
-                    getRow('Retail', s, it.size || '')[ent] += qty;
+                    getRow('Retail', s, it.kode_kecil, it.size || '')[ent] += qty;
                 });
             });
         });
@@ -4637,13 +4645,13 @@ function scShowKodeBreakdown(kode, mode) {
     if (includeConsig) {
         var consigArr = (typeof consignmentStockItems !== 'undefined') ? consignmentStockItems : [];
         consigArr.forEach(function(it) {
-            if (String(it.kode || '').toUpperCase() !== kodeUp) return;
+            if (!itemMatchesClicked(it)) return;
             if (!rowName) rowName = it.name || '';
             var ss = it.store_stock || {};
             Object.keys(ss).forEach(function(s) {
                 var qty = Number(ss[s]) || 0;
                 if (!qty) return;
-                getRow('Konsinyasi', s, it.size || '').CONSIG += qty;
+                getRow('Konsinyasi', s, it.kode_kecil, it.size || '').CONSIG += qty;
             });
         });
     }
@@ -4658,6 +4666,7 @@ function scShowKodeBreakdown(kode, mode) {
         var ta = tipeOrder[a.tipe] || 9, tb = tipeOrder[b.tipe] || 9;
         if (ta !== tb) return ta - tb;
         if (a.lokasi !== b.lokasi) return a.lokasi.localeCompare(b.lokasi);
+        if ((a.kodeKecil || '') !== (b.kodeKecil || '')) return (a.kodeKecil || '').localeCompare(b.kodeKecil || '');
         return (a.size || '').localeCompare(b.size || '');
     });
 
@@ -4704,9 +4713,16 @@ function scShowKodeBreakdown(kode, mode) {
         return rows.some(function(r){ return (r[e] || 0) !== 0; });
     });
 
+    // Show Kode Barang column only when click was at article-level (kode_kecil mode) — multiple per-size codes
+    var uniqueKK = {};
+    rows.forEach(function(r){ if (r.kodeKecil) uniqueKK[r.kodeKecil] = true; });
+    var showKodeKecil = Object.keys(uniqueKK).length > 1;
+
     var html = '<table class="data" style="width:100%;font-size:12px;">' +
         '<thead><tr>' +
-        '<th>Tipe</th><th>Lokasi</th><th class="center">Size</th>';
+        '<th>Tipe</th><th>Lokasi</th>' +
+        (showKodeKecil ? '<th class="center">Kode Barang</th>' : '') +
+        '<th class="center">Size</th>';
     entCols.forEach(function(e){
         html += '<th class="center">' + (e === 'CONSIG' ? 'Konsinyasi' : e) + '</th>';
     });
@@ -4720,6 +4736,7 @@ function scShowKodeBreakdown(kode, mode) {
         html += '<tr style="' + sep + '">' +
             '<td><span style="display:inline-block;padding:2px 8px;border-radius:3px;background:' + tipeBadge + ';color:#fff;font-size:10px;font-weight:700;">' + esc(r.tipe) + '</span></td>' +
             '<td>' + esc(r.lokasi) + '</td>' +
+            (showKodeKecil ? '<td class="center" style="font-family:ui-monospace,monospace;font-size:11px;">' + esc(r.kodeKecil || '—') + '</td>' : '') +
             '<td class="center" style="font-family:ui-monospace,monospace;font-size:11px;">' + esc(r.size || '—') + '</td>';
         entCols.forEach(function(e){
             var v = r[e] || 0;
@@ -4745,10 +4762,10 @@ function exportKodeBreakdownCSV() {
     var allEntCols = ['DDD','LJBB','MBB','UBB','CONSIG'];
     var entCols = allEntCols.filter(function(e){ return rows.some(function(r){ return (r[e] || 0) !== 0; }); });
     function escv(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
-    var headers = ['Tipe','Lokasi','Size'].concat(entCols.map(function(e){ return e === 'CONSIG' ? 'Konsinyasi' : e; })).concat(['Total']);
+    var headers = ['Tipe','Lokasi','Kode Barang','Size'].concat(entCols.map(function(e){ return e === 'CONSIG' ? 'Konsinyasi' : e; })).concat(['Total']);
     var out = [headers.map(escv).join(',')];
     rows.forEach(function(r) {
-        var line = [r.tipe, r.lokasi, r.size || ''].concat(entCols.map(function(e){ return r[e] || 0; })).concat([r.total]);
+        var line = [r.tipe, r.lokasi, r.kodeKecil || '', r.size || ''].concat(entCols.map(function(e){ return r[e] || 0; })).concat([r.total]);
         out.push(line.map(escv).join(','));
     });
     var blob = new Blob(['﻿' + out.join('\n')], { type: 'text/csv;charset=utf-8' });
