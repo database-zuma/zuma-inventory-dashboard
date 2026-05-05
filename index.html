@@ -963,6 +963,68 @@ html, body {
   .grid-2 { grid-template-columns: 1fr !important; }
 }
 
+/* ======= MULTI-SELECT FILTER (msx) — port from zuma-api-proxy ======= */
+.msx { position: relative; }
+.msx-btn {
+  width: 100%; min-height: 32px; padding: 6px 26px 6px 10px;
+  font: inherit; font-size: 12px; text-align: left;
+  background: #fff; color: #0f172a;
+  border: 1px solid #e5e7eb; border-radius: 6px;
+  cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  position: relative; transition: border 0.15s;
+  display: flex; align-items: center; gap: 6px;
+}
+.msx-btn:hover { border-color: #cbd5e1; }
+.msx-btn.has-value { border-color: #0066cc; background: rgba(0,102,204,0.04); }
+.msx-btn::after {
+  content: '▾'; position: absolute; right: 8px; top: 50%;
+  transform: translateY(-50%); font-size: 9px; color: #64748b;
+}
+.msx-btn-text { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.msx-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 16px; height: 16px; padding: 0 5px;
+  background: #0066cc; color: #fff;
+  font-size: 9px; font-weight: 700;
+  border-radius: 999px; flex-shrink: 0;
+}
+.msx-popup {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 500;
+  background: #fff; border: 1px solid #e5e7eb;
+  border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+  margin-top: 3px; padding: 6px;
+  max-height: 360px; min-width: 220px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.msx-popup[hidden] { display: none !important; }
+.msx-search {
+  padding: 6px 8px; border: 1px solid #e5e7eb; border-radius: 4px;
+  font: inherit; font-size: 12px; width: 100%; outline: none; box-sizing: border-box;
+}
+.msx-search:focus { border-color: #0066cc; }
+.msx-actions { display: flex; gap: 3px; }
+.msx-actions button {
+  flex: 1; font: inherit; font-size: 10px; font-weight: 600;
+  padding: 5px 6px; background: #f1f5f9;
+  border: 1px solid #e5e7eb; border-radius: 4px;
+  cursor: pointer; color: #0f172a;
+}
+.msx-actions button:hover { background: #e2e8f0; }
+.msx-list {
+  overflow-y: auto; max-height: 280px;
+  list-style: none; margin: 0; padding: 0;
+}
+.msx-option {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; cursor: pointer; font-size: 12px;
+  border-radius: 4px;
+  user-select: none;
+}
+.msx-option:hover { background: #f1f5f9; }
+.msx-option input[type="checkbox"] { accent-color: #0066cc; cursor: pointer; margin: 0; }
+.msx-option.active { background: rgba(0,102,204,0.08); font-weight: 500; }
+.msx-empty { padding: 14px 8px; text-align: center; color: #64748b; font-size: 11px; }
+
 </style>
 </head>
 <body>
@@ -1020,17 +1082,17 @@ html, body {
       <label class="filter-label" for="gfArea">Area</label>
       <select id="gfArea" class="filter-select" onchange="gfOnChange('area')"><option value="">Semua</option></select>
     </div>
-    <div class="filter-group" id="fgStore">
-      <label class="filter-label" for="gfStore">Toko / WH</label>
-      <select id="gfStore" class="filter-select" onchange="gfOnChange('store')"><option value="">Semua</option></select>
+    <div class="filter-group" id="fgStore" style="min-width:160px;">
+      <label class="filter-label">Toko / WH</label>
+      <div class="msx" id="msxStore"></div>
     </div>
     <div class="filter-group">
       <label class="filter-label" for="gfGender">Gender</label>
       <select id="gfGender" class="filter-select" onchange="gfOnChange('gender')"><option value="">Semua</option></select>
     </div>
-    <div class="filter-group">
-      <label class="filter-label" for="gfSeries">Series</label>
-      <select id="gfSeries" class="filter-select" onchange="gfOnChange('series')"><option value="">Semua</option></select>
+    <div class="filter-group" style="min-width:160px;">
+      <label class="filter-label">Series</label>
+      <div class="msx" id="msxSeries"></div>
     </div>
     <div class="filter-group">
       <label class="filter-label" for="gfTier">Tier</label>
@@ -1200,19 +1262,6 @@ html, body {
         <option value="normal">2-4 (Normal)</option>
         <option value="high">&gt;4 (High)</option>
       </select>
-      <span style="width:1px;height:24px;background:var(--border);margin:0 4px;"></span>
-      <label class="filter-label" style="margin:0;">Series</label>
-      <div id="scSeriesMS" style="position:relative;min-width:160px;">
-        <button type="button" id="scSeriesMSBtn" onclick="scMSToggle(event)" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:#fff;font-size:12px;cursor:pointer;text-align:left;">Semua Series</button>
-        <div id="scSeriesMSPanel" style="display:none;position:absolute;top:calc(100% + 4px);left:0;min-width:240px;max-height:280px;overflow:hidden;background:#fff;border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.12);z-index:1000;">
-          <input type="text" id="scSeriesMSSearch" placeholder="🔍 Cari series..." onkeyup="scMSFilter(this.value)" style="width:100%;padding:8px;border:0;border-bottom:1px solid var(--border);font-size:12px;outline:none;box-sizing:border-box;">
-          <div style="padding:4px 8px;border-bottom:1px solid var(--border);display:flex;gap:8px;font-size:11px;">
-            <a href="javascript:scMSSelectAll()" style="color:var(--navy);">Pilih Semua</a>
-            <a href="javascript:scMSClear()" style="color:#dc2626;">Reset</a>
-          </div>
-          <div id="scSeriesMSList" style="max-height:200px;overflow-y:auto;padding:4px 0;"></div>
-        </div>
-      </div>
     </div>
     <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--fg-muted);">
       <input type="checkbox" id="scHideZero" checked onchange="scRender()"> Sembunyikan total=0
@@ -1923,7 +1972,7 @@ function updateMaxStockAnalysis() {
     if (typeof gf !== 'undefined') {
         var whArEl = document.getElementById('msWHFilterArea'); if (whArEl) whArEl.value = gf.area || '';
         var rtArEl = document.getElementById('msFilterArea');   if (rtArEl) rtArEl.value = gf.area || '';
-        var rtStEl = document.getElementById('msFilterStore');  if (rtStEl) rtStEl.value = gf.store || '';
+        var rtStEl = document.getElementById('msFilterStore');  if (rtStEl) rtStEl.value = (Array.isArray(gf.store) ? (gf.store[0] || '') : (gf.store || ''));
     }
 
     if (isWH) {
@@ -2938,7 +2987,6 @@ function renderStockByArea() {
     var tierF = _gf.tier || '';
     var verF = _gf.version || '';
     var genderF = _gf.gender || '';
-    var seriesF = _gf.series || '';
     var hideEmpty = hEl ? hEl.checked : false;
 
     function rowVisibleTotal(r) {
@@ -2950,7 +2998,7 @@ function renderStockByArea() {
         if (tierF && String(r.tier) !== tierF) return false;
         if (verF && String(r.version) !== verF) return false;
         if (genderF && String(r.gender) !== genderF) return false;
-        if (seriesF && String(r.series) !== seriesF) return false;
+        if (!_gfMatch(String(r.series), _gf.series)) return false;
         if (q) {
             var hay = (r.kode + '|' + r.kode_kecil + '|' + r.name).toLowerCase();
             if (hay.indexOf(q) === -1) return false;
@@ -3109,7 +3157,6 @@ function exportStockByAreaCSV() {
     var tierF = _gf.tier || '';
     var verF = _gf.version || '';
     var genderF = _gf.gender || '';
-    var seriesF = _gf.series || '';
     var hideEmpty = hEl ? hEl.checked : false;
     function rowVisTot(r) { return (showWH ? r.whQty : 0) + (showToko ? r.tokoQty : 0) + (showConsig ? r.consigQty : 0); }
     var filtered = rows.filter(function(r) {
@@ -3117,7 +3164,7 @@ function exportStockByAreaCSV() {
         if (tierF && String(r.tier) !== tierF) return false;
         if (verF && String(r.version) !== verF) return false;
         if (genderF && String(r.gender) !== genderF) return false;
-        if (seriesF && String(r.series) !== seriesF) return false;
+        if (!_gfMatch(String(r.series), _gf.series)) return false;
         if (q) {
             var hay = (r.kode + '|' + r.kode_kecil + '|' + r.name).toLowerCase();
             if (hay.indexOf(q) === -1) return false;
@@ -3880,9 +3927,9 @@ async function exportStockOnHand(type, entity) {
         var map = {}; sizes.forEach(function(sz, i) { map[sz] = i; }); sizeIndexMap[kode] = map;
     });
 
-    // Global filter: narrow to specific store OR area if user picked one
+    // Global filter: narrow to specific store(s) OR area if user picked one
     var _gfArea  = (typeof gf !== 'undefined' && gf && gf.area) ? gf.area : '';
-    var _gfStore = (typeof gf !== 'undefined' && gf && gf.store) ? gf.store : '';
+    var _gfStoreArr = (typeof gf !== 'undefined' && gf && Array.isArray(gf.store)) ? gf.store : (gf.store ? [gf.store] : []);
     var allRows = [], minusRows = [];
     rawData.forEach(function(item) {
         if (!item.store_stock) return;
@@ -3894,9 +3941,9 @@ async function exportStockOnHand(type, entity) {
             if (type === 'warehouse' && !isWarehouseLocation(store)) return;
             var sl = store.toLowerCase();
             if (type === 'warehouse' && (sl.indexOf('online bali') >= 0 || sl.indexOf('online jakarta') >= 0 || sl.indexOf('online jkt') >= 0)) return;
-            // Global Store filter takes priority (single store). Otherwise fall back to Area filter.
-            if (_gfStore) {
-                if (store !== _gfStore) return;
+            // Global Store filter takes priority (multi-select). Otherwise fall back to Area filter.
+            if (_gfStoreArr.length) {
+                if (_gfStoreArr.indexOf(store) === -1) return;
             } else if (_gfArea) {
                 var sa = (typeof getAreaFromStore === 'function') ? getAreaFromStore(store) : '';
                 if (sa !== _gfArea) return;
@@ -3993,9 +4040,9 @@ async function exportConsig(entity) {
         var sizes = Object.keys(csizeMap[k]).sort(function(a,b) { return (parseInt(a)||0) - (parseInt(b)||0); });
         var m = {}; sizes.forEach(function(s,i) { m[s] = i; }); csizeMap[k] = m;
     });
-    // Global filter: narrow to specific store OR area if user picked one
+    // Global filter: narrow to specific store(s) OR area if user picked one
     var _gfArea  = (typeof gf !== 'undefined' && gf && gf.area) ? gf.area : '';
-    var _gfStore = (typeof gf !== 'undefined' && gf && gf.store) ? gf.store : '';
+    var _gfStoreArr = (typeof gf !== 'undefined' && gf && Array.isArray(gf.store)) ? gf.store : (gf.store ? [gf.store] : []);
     var allRows = [];
     items.forEach(function(i) {
         var kodeUp = (i.kode||'').toUpperCase();
@@ -4004,14 +4051,14 @@ async function exportConsig(entity) {
         var ca = '-';
         if (assortStr !== '-') { var p = assortStr.split('-'); ca = (sIdx < p.length) ? (parseInt(p[sIdx])||'-') : '-'; }
         if (!i.store_stock) {
-            if (_gfStore || _gfArea) return; // skip placeholder rows when user filtered specifically
+            if (_gfStoreArr.length || _gfArea) return; // skip placeholder rows when user filtered specifically
             allRows.push(['-', i.partner||'', getAreaFromStore('-'), (i.kode_kecil||'').toUpperCase(), kodeUp, (i.kode_mix||'').toUpperCase(), (i.sku||'').toUpperCase(), i.name||'', i.size||'', i.gender||'', i.series||'', i.tipe||'', ca, i.tier||'', i.version||'', i.total||0]);
         } else {
             Object.entries(i.store_stock).forEach(function(entry) {
                 var store = entry[0], stock = entry[1];
                 if (stock === 0) return;
-                if (_gfStore) {
-                    if (store !== _gfStore) return;
+                if (_gfStoreArr.length) {
+                    if (_gfStoreArr.indexOf(store) === -1) return;
                 } else if (_gfArea) {
                     var sa = (typeof getAreaFromStore === 'function') ? getAreaFromStore(store) : '';
                     if (sa !== _gfArea) return;
@@ -4238,7 +4285,7 @@ function invRender() {
                 var a = (typeof getAreaFromStore === 'function') ? getAreaFromStore(s) : '';
                 if (a !== area) return;
             }
-            if (store && s !== store) return;
+            if (!_gfMatch(s, store)) return;
             var v = Number(ss[s]) || 0;
             if (v !== 0) { qty += v; loc += 1; }
         });
@@ -4261,7 +4308,7 @@ function invRender() {
     var filtered = rows.filter(function(r){
         if (tier && r.tier !== tier) return false;
         if (gender && r.gender !== gender) return false;
-        if (series && r.series !== series) return false;
+        if (!_gfMatch(r.series, gf.series)) return false;
         if (version && String(r.version) !== version) return false;
         if (q) {
             var hay = (r.kode + '|' + r.kode_kecil + '|' + r.name).toLowerCase();
@@ -4302,7 +4349,7 @@ function invRender() {
                 var a = (typeof getAreaFromStore === 'function') ? getAreaFromStore(s) : '';
                 if (a !== area) return;
             }
-            if (store && s !== store) return;
+            if (!_gfMatch(s, store)) return;
             if ((Number(it.store_stock[s]) || 0) !== 0) storeSet[s] = true;
         });
     });
@@ -4395,7 +4442,7 @@ function buildMinusOnHandRows() {
         var kk = (it.kode_kecil || '').toUpperCase();
         if (!kk) return;
         Object.keys(ss).forEach(function(s) {
-            if (store && s !== store) return;
+            if (!_gfMatch(s, store)) return;
             var v = Number(ss[s]) || 0;
             if (v === 0) return;
             // Normalize store name for aggregation key (lowercase + trim) so "Zuma PTC" and
@@ -4771,85 +4818,6 @@ function scGetSourceItems() {
     return allItems;
 }
 
-// Stock Control Series multi-select state + helpers (search + checkbox, override gf.series)
-var scSeriesArr = [];
-
-function scMSToggle(evt) {
-    var panel = document.getElementById('scSeriesMSPanel');
-    if (!panel) return;
-    panel.style.display = (panel.style.display === 'block') ? 'none' : 'block';
-    if (evt && evt.stopPropagation) evt.stopPropagation();
-}
-
-function scMSFilter(query) {
-    var list = document.getElementById('scSeriesMSList');
-    if (!list) return;
-    var q = (query || '').toLowerCase();
-    Array.prototype.forEach.call(list.children, function(item) {
-        var name = (item.dataset.value || '').toLowerCase();
-        item.style.display = (!q || name.indexOf(q) !== -1) ? 'flex' : 'none';
-    });
-}
-
-function scMSPopulate() {
-    var items = scGetSourceItems();
-    var seriesSet = {};
-    items.forEach(function(it){ if (it.series) seriesSet[it.series] = true; });
-    var keys = Object.keys(seriesSet).sort();
-    var list = document.getElementById('scSeriesMSList');
-    if (!list) return;
-    list.innerHTML = keys.map(function(s){
-        var checked = scSeriesArr.indexOf(s) >= 0 ? 'checked' : '';
-        var safe = String(s).replace(/'/g, "&#39;");
-        return '<label data-value="' + esc(s) + '" style="display:flex;align-items:center;gap:6px;padding:4px 10px;font-size:12px;cursor:pointer;hover:background:#f1f5f9;"><input type="checkbox" ' + checked + ' onchange="scMSToggleItem(\'' + safe + '\', this.checked)"> ' + esc(s) + '</label>';
-    }).join('');
-    scMSUpdateBtnLabel();
-}
-
-function scMSToggleItem(value, checked) {
-    if (checked && scSeriesArr.indexOf(value) < 0) scSeriesArr.push(value);
-    else if (!checked) scSeriesArr = scSeriesArr.filter(function(v){ return v !== value; });
-    scMSUpdateBtnLabel();
-    if (typeof scRender === 'function') scRender();
-}
-
-function scMSSelectAll() {
-    var list = document.getElementById('scSeriesMSList');
-    if (!list) return;
-    scSeriesArr = [];
-    Array.prototype.forEach.call(list.querySelectorAll('label'), function(el){
-        var v = el.dataset.value;
-        if (v) scSeriesArr.push(v);
-        var cb = el.querySelector('input[type=checkbox]'); if (cb) cb.checked = true;
-    });
-    scMSUpdateBtnLabel();
-    if (typeof scRender === 'function') scRender();
-}
-
-function scMSClear() {
-    scSeriesArr = [];
-    var list = document.getElementById('scSeriesMSList');
-    if (list) Array.prototype.forEach.call(list.querySelectorAll('input[type=checkbox]'), function(cb){ cb.checked = false; });
-    scMSUpdateBtnLabel();
-    if (typeof scRender === 'function') scRender();
-}
-
-function scMSUpdateBtnLabel() {
-    var btn = document.getElementById('scSeriesMSBtn');
-    if (!btn) return;
-    var n = scSeriesArr.length;
-    if (!n) btn.textContent = 'Semua Series';
-    else if (n <= 2) btn.textContent = scSeriesArr.join(', ');
-    else btn.textContent = n + ' series dipilih';
-}
-
-// Click outside to close panel
-document.addEventListener('click', function(e) {
-    var ms = document.getElementById('scSeriesMS');
-    var panel = document.getElementById('scSeriesMSPanel');
-    if (ms && panel && !ms.contains(e.target)) panel.style.display = 'none';
-});
-
 function scPopulateFilters() {
     var items = scGetSourceItems();
     var tiers = {}, genders = {}, series = {};
@@ -4858,8 +4826,6 @@ function scPopulateFilters() {
         if (it.gender) genders[it.gender] = true;
         if (it.series) series[it.series] = true;
     });
-    // Populate Stock Control Series multi-select widget
-    scMSPopulate();
     function fill(id, map, sortFn) {
         var el = document.getElementById(id); if (!el) return;
         var cur = el.value;
@@ -5014,12 +4980,7 @@ function scRender() {
         if (hideZero && r.globalStock === 0) return false;
         if (tier && r.tier !== tier) return false;
         if (gender && r.gender !== gender) return false;
-        // Series: prefer Stock Control multi-select widget; fallback to global gfSeries
-        if (scSeriesArr.length) {
-            if (scSeriesArr.indexOf(r.series) === -1) return false;
-        } else if (series && r.series !== series) {
-            return false;
-        }
+        if (!_gfMatch(r.series, gf.series)) return false;
         if (version && String(r.version) !== version) return false;
         if (q) {
             var hay = (r.kode + '|' + r.kode_kecil + '|' + r.name).toLowerCase();
@@ -5454,7 +5415,7 @@ function scoRender() {
         if (hideZero && r.whOnlineTotal === 0) return false;
         if (tier && r.tier !== tier) return false;
         if (gender && r.gender !== gender) return false;
-        if (series && r.series !== series) return false;
+        if (!_gfMatch(r.series, gf.series)) return false;
         if (version && String(r.version) !== version) return false;
         if (q) {
             var hay = (r.kode + '|' + r.kode_kecil + '|' + r.name).toLowerCase();
@@ -5698,30 +5659,212 @@ var gf = {
     entity: 'DDD',
     channel: 'retail',   // retail | warehouse | consignment
     area: '',
-    store: '',
+    store: [],   // multi-select: array of toko names; empty array = "Semua"
     gender: '',
-    series: '',
+    series: [],  // multi-select: array of series names; empty array = "Semua"
     tier: '',
     version: '',
     search: ''
 };
 
+// Helper: normalize multi-select filter into match check.
+// Returns true if value passes filter (filter empty = pass all).
+function _gfMatch(value, filter) {
+    if (filter == null) return true;
+    if (Array.isArray(filter)) {
+        if (!filter.length) return true;
+        return filter.indexOf(value) !== -1;
+    }
+    if (filter === '') return true;
+    return value === filter;
+};
+
+// ============ MULTI-SELECT WIDGET (msx) — port from zuma-api-proxy ============
+class MultiSelect {
+    constructor(host, opts) {
+        opts = opts || {};
+        this.host = host;
+        this.placeholder = opts.placeholder || 'Semua';
+        this.searchable = opts.searchable !== false;
+        this.onChange = opts.onChange || null;
+        this.options = [];
+        this.selected = new Set();
+        this.open = false;
+        this._build();
+    }
+    _build() {
+        this.host.classList.add('msx');
+        this.host.innerHTML = '';
+        this.btn = document.createElement('button');
+        this.btn.type = 'button';
+        this.btn.className = 'msx-btn';
+        var self = this;
+        this.btn.onclick = function(e){ e.stopPropagation(); self.toggle(); };
+        this.host.appendChild(this.btn);
+
+        this.popup = document.createElement('div');
+        this.popup.className = 'msx-popup';
+        this.popup.hidden = true;
+        this.popup.onclick = function(e){ e.stopPropagation(); };
+        this.host.appendChild(this.popup);
+
+        if (this.searchable) {
+            this.search = document.createElement('input');
+            this.search.type = 'text';
+            this.search.className = 'msx-search';
+            this.search.placeholder = 'Cari...';
+            this.search.oninput = function(){ self._renderList(); };
+            this.popup.appendChild(this.search);
+        }
+
+        var actions = document.createElement('div');
+        actions.className = 'msx-actions';
+        var allBtn = document.createElement('button');
+        allBtn.type = 'button';
+        allBtn.textContent = 'Pilih Semua';
+        allBtn.onclick = function(){ self.selectAllVisible(); };
+        var clrBtn = document.createElement('button');
+        clrBtn.type = 'button';
+        clrBtn.textContent = 'Hapus';
+        clrBtn.onclick = function(){ self.clear(); };
+        actions.appendChild(allBtn);
+        actions.appendChild(clrBtn);
+        this.popup.appendChild(actions);
+
+        this.list = document.createElement('ul');
+        this.list.className = 'msx-list';
+        this.popup.appendChild(this.list);
+
+        document.addEventListener('click', function(e){
+            if (self.open && !self.host.contains(e.target)) self.close();
+        });
+        this._updateButton();
+    }
+    setOptions(values) {
+        this.options = (values || []).map(function(v){ return typeof v === 'string' ? { value: v, label: v } : v; });
+        this._renderList();
+        this._updateButton();
+    }
+    setSelected(values) {
+        this.selected = new Set(values || []);
+        this._renderList();
+        this._updateButton();
+    }
+    getSelected() { return Array.from(this.selected); }
+    _renderList() {
+        var q = this.search ? this.search.value.toLowerCase().trim() : '';
+        var visible = q ? this.options.filter(function(o){ return o.label.toLowerCase().indexOf(q) !== -1; }) : this.options;
+        this.list.innerHTML = '';
+        if (!visible.length) {
+            var empty = document.createElement('li');
+            empty.className = 'msx-empty';
+            empty.textContent = q ? 'Tidak ada hasil untuk "' + q + '"' : 'Tidak ada opsi';
+            this.list.appendChild(empty);
+            return;
+        }
+        var self = this;
+        visible.forEach(function(opt){
+            var li = document.createElement('li');
+            li.className = 'msx-option' + (self.selected.has(opt.value) ? ' active' : '');
+            var cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = self.selected.has(opt.value);
+            cb.onclick = function(e){ e.stopPropagation(); self._toggleValue(opt.value); };
+            var lbl = document.createElement('span');
+            lbl.textContent = opt.label;
+            li.appendChild(cb);
+            li.appendChild(lbl);
+            li.onclick = function(e){ if (e.target.tagName !== 'INPUT') self._toggleValue(opt.value); };
+            self.list.appendChild(li);
+        });
+    }
+    _toggleValue(v) {
+        if (this.selected.has(v)) this.selected.delete(v);
+        else this.selected.add(v);
+        this._updateButton();
+        if (this.onChange) this.onChange(Array.from(this.selected));
+        var self = this;
+        requestAnimationFrame(function(){ self._renderList(); });
+    }
+    selectAllVisible() {
+        var q = this.search ? this.search.value.toLowerCase().trim() : '';
+        var visible = q ? this.options.filter(function(o){ return o.label.toLowerCase().indexOf(q) !== -1; }) : this.options;
+        var self = this;
+        visible.forEach(function(o){ self.selected.add(o.value); });
+        this._updateButton();
+        if (this.onChange) this.onChange(Array.from(this.selected));
+        requestAnimationFrame(function(){ self._renderList(); });
+    }
+    clear() {
+        if (this.selected.size === 0) return;
+        this.selected.clear();
+        this._updateButton();
+        if (this.onChange) this.onChange([]);
+        var self = this;
+        requestAnimationFrame(function(){ self._renderList(); });
+    }
+    _updateButton() {
+        var n = this.selected.size;
+        var ph = String(this.placeholder).replace(/[<>&"']/g, function(c){ return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]; });
+        if (n === 0) {
+            this.btn.innerHTML = '<span class="msx-btn-text">' + ph + '</span>';
+            this.btn.classList.remove('has-value');
+        } else if (n === 1) {
+            var v = String(Array.from(this.selected)[0]).replace(/[<>&"']/g, function(c){ return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]; });
+            this.btn.innerHTML = '<span class="msx-btn-text">' + v + '</span>';
+            this.btn.classList.add('has-value');
+        } else {
+            this.btn.innerHTML = '<span class="msx-btn-text">' + ph + '</span> <span class="msx-badge">' + n + '</span>';
+            this.btn.classList.add('has-value');
+        }
+    }
+    toggle() { this.open ? this.close() : this.open_(); }
+    open_() {
+        document.querySelectorAll('.msx-popup').forEach(function(p){ p.hidden = true; });
+        this.popup.hidden = false; this.open = true;
+        if (this.search) { this.search.value = ''; this._renderList(); this.search.focus(); }
+    }
+    close() { this.popup.hidden = true; this.open = false; }
+}
+
+// Global widget instances (initialized after DOM ready)
+var _gfStoreMs = null, _gfSeriesMs = null;
+function _initMsxWidgets() {
+    if (_gfStoreMs && _gfSeriesMs) return;
+    var storeHost = document.getElementById('msxStore');
+    var seriesHost = document.getElementById('msxSeries');
+    if (storeHost && !_gfStoreMs) {
+        _gfStoreMs = new MultiSelect(storeHost, { placeholder: 'Semua Toko/WH', searchable: true, onChange: function(arr){
+            gf.store = arr || [];
+            gfDispatchToActiveTab();
+        }});
+    }
+    if (seriesHost && !_gfSeriesMs) {
+        _gfSeriesMs = new MultiSelect(seriesHost, { placeholder: 'Semua Series', searchable: true, onChange: function(arr){
+            gf.series = arr || [];
+            gfDispatchToActiveTab();
+        }});
+    }
+}
+
 function gfOnChange(field) {
+    // Series/Store handled by msx widgets via their onChange callback — bypass scalar set
+    if (field === 'series' || field === 'store') { gfDispatchToActiveTab(); return; }
     var el = document.getElementById('gf' + field.charAt(0).toUpperCase() + field.slice(1));
     if (!el) return;
     gf[field] = el.value;
     // Channel change repopulates area/store dropdowns
     if (field === 'channel' || field === 'entity') {
         gfPopulateDependentFilters();
-        gf.area = ''; gf.store = '';
+        gf.area = ''; gf.store = [];
         var a = document.getElementById('gfArea'); if (a) a.value = '';
-        var s = document.getElementById('gfStore'); if (s) s.value = '';
+        if (_gfStoreMs) _gfStoreMs.setSelected([]);
     }
     // Area change updates Store dropdown
     if (field === 'area') {
         gfPopulateStoreDropdown();
-        gf.store = '';
-        var s = document.getElementById('gfStore'); if (s) s.value = '';
+        gf.store = [];
+        if (_gfStoreMs) _gfStoreMs.setSelected([]);
         // Stock Control: refetch sales aggregate scoped to selected area
         if (activeTab === 'stockcontrol' && typeof window._scRefetchSalesByArea === 'function') {
             window._scRefetchSalesByArea(gf.area);
@@ -5732,14 +5875,19 @@ function gfOnChange(field) {
 
 function gfReset() {
     gf.channel = 'retail';
-    gf.area = ''; gf.store = '';
-    gf.gender = ''; gf.series = ''; gf.tier = ''; gf.version = '';
+    gf.area = '';
+    gf.store = [];   // multi-select reset
+    gf.gender = '';
+    gf.series = []; // multi-select reset
+    gf.tier = ''; gf.version = '';
     gf.search = '';
-    var ids = { channel: 'retail', area: '', store: '', gender: '', series: '', tier: '', version: '', search: '' };
+    var ids = { channel: 'retail', area: '', gender: '', tier: '', version: '', search: '' };
     Object.keys(ids).forEach(function(k){
         var el = document.getElementById('gf' + k.charAt(0).toUpperCase() + k.slice(1));
         if (el) el.value = ids[k];
     });
+    if (_gfStoreMs) _gfStoreMs.setSelected([]);
+    if (_gfSeriesMs) _gfSeriesMs.setSelected([]);
     gfPopulateDependentFilters();
     if (activeTab === 'stockcontrol' && typeof window._scRefetchSalesByArea === 'function') {
         window._scRefetchSalesByArea('');
@@ -5793,8 +5941,13 @@ function gfPopulateDependentFilters() {
     fill('gfArea', areas);
     fill('gfTier', tiers, function(a,b){ return (parseInt(a)||0) - (parseInt(b)||0); });
     fill('gfGender', genders);
-    fill('gfSeries', series);
     fill('gfVersion', versions, function(a,b){ return (parseInt(a)||0) - (parseInt(b)||0); });
+    // Series + Toko go through msx widgets (multi-select)
+    _initMsxWidgets();
+    if (_gfSeriesMs) {
+        _gfSeriesMs.setOptions(Object.keys(series).sort());
+        _gfSeriesMs.setSelected(gf.series || []);
+    }
     gfPopulateStoreDropdown();
 }
 
@@ -5811,11 +5964,15 @@ function gfPopulateStoreDropdown() {
             stores[s] = true;
         });
     });
-    var el = document.getElementById('gfStore'); if (!el) return;
-    var cur = el.value;
-    var keys = Object.keys(stores).sort();
-    el.innerHTML = '<option value="">Semua</option>' + keys.map(function(k){ return '<option>' + esc(k) + '</option>'; }).join('');
-    if (keys.indexOf(cur) >= 0) el.value = cur; else el.value = '';
+    _initMsxWidgets();
+    if (_gfStoreMs) {
+        var keys = Object.keys(stores).sort();
+        _gfStoreMs.setOptions(keys);
+        // Preserve current selection where still valid
+        var cur = (gf.store || []).filter(function(v){ return keys.indexOf(v) !== -1; });
+        _gfStoreMs.setSelected(cur);
+        gf.store = cur;
+    }
 }
 
 function gfDispatchToActiveTab() {
