@@ -1008,7 +1008,7 @@ html, body {
         <option value="LJBB">LJBB</option>
       </select>
     </div>
-    <div class="filter-group">
+    <div class="filter-group" id="fgChannel">
       <label class="filter-label" for="gfChannel">Channel</label>
       <select id="gfChannel" class="filter-select" onchange="gfOnChange('channel')">
         <option value="retail">Retail</option>
@@ -1426,6 +1426,9 @@ function switchHubTab(tab) {
     document.querySelectorAll('.tab-btn[data-tab]').forEach(function(b){ b.classList.toggle('active', b.dataset.tab === tab); });
     document.querySelectorAll('.tab-content').forEach(function(s){ s.classList.toggle('active', s.dataset.tab === tab); });
     if (history.replaceState) history.replaceState(null, '', '#' + tab);
+    // Hide Channel filter on Stock Control tab — Stock Control aggregates all channels regardless
+    var fgChannel = document.getElementById('fgChannel');
+    if (fgChannel) fgChannel.style.display = (tab === 'stockcontrol') ? 'none' : '';
     // Trigger tab-specific init once data loaded
     if (!_tabsInitialized[tab] && _dataLoaded) {
         _tabsInitialized[tab] = true;
@@ -4769,8 +4772,9 @@ function scPopulateFilters() {
 }
 
 function scRender() {
-    // Sync from global filters — channel=retail uses retail, channel=warehouse treats as 'online' (WH online); else retail
-    scCurrentType = (gf.channel === 'warehouse') ? 'online' : 'retail';
+    // Stock Control unified — IGNORE gf.channel (channel filter doesn't apply to Stock Control).
+    // Always aggregate from all sources (warehouse + retail + consig + online warehouses).
+    scCurrentType = 'retail';
     var items = scGetSourceItems();
     var q = (gf.search || '').toLowerCase().trim();
     var tier = gf.tier || '';
@@ -5128,9 +5132,13 @@ function scRender() {
                 var gapCls = r.gap < 0 ? 'color:#dc2626;' : (r.gap === 0 ? 'color:var(--fg-soft);' : 'color:#16a34a;');
                 var twCls  = noSales ? 'color:var(--fg-soft);' : (r.tw < 2 ? 'color:#dc2626;' : (r.tw < 4 ? 'color:#d97706;' : 'color:#16a34a;'));
                 var toCls  = noSales ? 'color:var(--fg-soft);' : (r.to < 1 ? 'color:#dc2626;' : (r.to < 2 ? 'color:#d97706;' : 'color:#16a34a;'));
+                var rowKodeUpper = String(r.kode || r.kode_kecil || '').toUpperCase();
                 function stkCell(v, highlight) {
                     var bg = highlight ? 'background:var(--navy-soft);' : '';
                     var cls = v < 0 ? 'color:#ef4444;' : (v === 0 ? 'color:var(--fg-soft);' : '');
+                    if (rowKodeUpper && v !== 0) {
+                        return '<td class="center" onclick="scShowKodeBreakdown(\'' + rowKodeUpper + '\',\'retail\')" title="Klik buat lihat breakdown stok per gudang & entitas" style="' + cls + bg + 'font-variant-numeric:tabular-nums;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px;">' + fmt(v) + '</td>';
+                    }
                     return '<td class="center" style="' + cls + bg + 'font-variant-numeric:tabular-nums;">' + fmt(v) + '</td>';
                 }
                 var firstCols;
