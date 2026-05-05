@@ -1161,10 +1161,10 @@ html, body {
 </section>
 <section class="tab-content active" data-tab="stockcontrol">
 
-  <!-- Sub-tab Toggle: Retail vs Online -->
-  <div style="display:flex;gap:8px;margin-bottom:14px;border-bottom:2px solid var(--border);padding-bottom:0;">
-    <button id="scSubTabRetail" class="btn btn-primary" onclick="scSwitchSubTab('retail')" style="padding:8px 18px;font-size:13px;border-radius:4px 4px 0 0;border-bottom-color:transparent;">📦 Stock Control Retail</button>
-    <button id="scSubTabOnline" class="btn" onclick="scSwitchSubTab('online')" style="padding:8px 18px;font-size:13px;border-radius:4px 4px 0 0;border-bottom-color:transparent;">🛒 Stock Control Online</button>
+  <!-- Sub-tab Toggle: Retail+Online merged into single Stock Control view -->
+  <div style="display:none;">
+    <button id="scSubTabRetail" class="btn btn-primary" onclick="scSwitchSubTab('retail')">Stock Control</button>
+    <button id="scSubTabOnline" class="btn" onclick="scSwitchSubTab('online')" style="display:none;">Online (deprecated)</button>
   </div>
 
   <!-- ============== RETAIL SECTION ============== -->
@@ -4827,11 +4827,12 @@ function scRender() {
     // Stock Control area filter: respect global filter (gf.area). Lombok merged into Bali.
     // classifyWhArea returns 'WHB'|'WHJ'|'WHS'|'WHOB'|'WHOJ'. Map area filter to WH codes.
     var scAreaFilter = (typeof gf !== 'undefined' && gf.area) ? gf.area : '';
-    function _scAreaWHCode(a) {
-        if (a === 'Bali') return 'WHB';
-        if (a === 'Jakarta') return 'WHJ';
-        if (a === 'Jawa Timur' || a === 'Jatim') return 'WHS';
-        return null; // Batam/Sulawesi/Sumatera/Lombok have no own warehouse
+    function _scAreaWHCodes(a) {
+        // Bali: WHB + WH Online Bali; Jakarta: WHJ + WH Online Jakarta; Jatim: WHS only
+        if (a === 'Bali') return ['WHB', 'WHOB'];
+        if (a === 'Jakarta') return ['WHJ', 'WHOJ'];
+        if (a === 'Jawa Timur' || a === 'Jatim') return ['WHS'];
+        return []; // Batam/Sulawesi/Sumatera/Lombok have no own warehouse
     }
     function _scStoreInArea(store, a) {
         if (!a) return true;
@@ -4854,7 +4855,7 @@ function scRender() {
     }
 
     // Aggregate warehouse (DDD+LJBB+MBB+UBB) — area-scoped if filter set
-    var scAreaWHcode = _scAreaWHCode(scAreaFilter);
+    var scAreaWHcodes = _scAreaWHCodes(scAreaFilter);
     ['DDD','LJBB','MBB','UBB'].forEach(function(ent) {
         var ed = (allData || {})[ent] || {};
         (ed.warehouse || []).forEach(function(it) {
@@ -4864,7 +4865,7 @@ function scRender() {
                 var c = classifyWhArea(wh);
                 if (!c) return;
                 // Area filter: only count WH matching selected area (skip if no WH for that area)
-                if (scAreaFilter && c !== scAreaWHcode) return;
+                if (scAreaFilter && scAreaWHcodes.indexOf(c) === -1) return;
                 var qty = Number(it.store_stock[wh]) || 0;
                 row[c] += qty;
             });
@@ -4894,12 +4895,12 @@ function scRender() {
         });
     });
 
-    // Compute derived fields per row. Retail sub-tab's Stok Global excludes WH Online
-    // since Online is now a separate sub-tab with its own totals.
+    // Compute derived fields per row. Stock Control unified: globalStock includes
+    // WH Online (Bali + Jkt) since Online sub-tab is merged into Retail.
     Object.values(byKK).forEach(function(r) {
         r.whTotal = r.WHS + r.WHB + r.WHJ;
         r.whOnlineTotal = r.WHOB + r.WHOJ;
-        r.globalStock = r.whTotal + r.stokRetail + r.stokConsig;
+        r.globalStock = r.whTotal + r.whOnlineTotal + r.stokRetail + r.stokConsig;
         r.total = r.globalStock; // for compat
     });
 
@@ -4980,11 +4981,11 @@ function scRender() {
     });
     scFiltered = rows;
 
-    // Summary cards (6): WH Pusat (Jatim), WH Bali, WH Jakarta, Retail, Consig, Global
-    // WH Online (Bali/Jkt) NOT shown as a separate card but counted in Global (master parity)
+    // Summary cards: WH Pusat / WH Bali / WH Jakarta / WH O.Bali / WH O.Jkt / Retail / Consig / Global
+    // Online warehouse merged into Global (Stock Control unified Retail+Online)
     var ent = typeof currentEntity !== 'undefined' ? currentEntity : 'DDD';
     var aggWH = { 'Jawa Timur':0, 'Bali':0, 'Jakarta':0 };
-    var aggOnline = 0, aggRetail = 0, aggConsig = 0;
+    var aggOnlineBali = 0, aggOnlineJkt = 0, aggRetail = 0, aggConsig = 0;
     var entData = (allData || {})[ent] || {};
     (entData.warehouse || []).forEach(function(it) {
         if (!it.store_stock) return;
@@ -4992,8 +4993,11 @@ function scRender() {
             var wl = wh.toLowerCase();
             var qty = Number(it.store_stock[wh]) || 0;
             // ONLINE matches must come BEFORE the bali/jakarta catch-alls
-            if (wl.indexOf('online') !== -1 && (wl.indexOf('bali') !== -1 || wl.indexOf('jakarta') !== -1 || wl.indexOf('jkt') !== -1)) {
-                if (!scAreaFilter) aggOnline += qty;
+            if (wl.indexOf('online') !== -1 && wl.indexOf('bali') !== -1) {
+                if (!scAreaFilter || scAreaFilter === 'Bali') aggOnlineBali += qty;
+            }
+            else if (wl.indexOf('online') !== -1 && (wl.indexOf('jakarta') !== -1 || wl.indexOf('jkt') !== -1)) {
+                if (!scAreaFilter || scAreaFilter === 'Jakarta') aggOnlineJkt += qty;
             }
             else if (wl.indexOf('bali') !== -1 || wl.indexOf('gatsu') !== -1) {
                 if (!scAreaFilter || scAreaFilter === 'Bali') aggWH['Bali'] += qty;
@@ -5023,8 +5027,9 @@ function scRender() {
             aggConsig += Number(it.store_stock[s]) || 0;
         });
     });
-    // Retail Stok Global excludes aggOnline — Online has its own sub-tab
-    var aggGlobal = aggWH['Jawa Timur'] + aggWH['Bali'] + aggWH['Jakarta'] + aggRetail + aggConsig;
+    // Stock Control unified: Global = WH Pusat+Bali+Jkt + WH Online Bali+Jkt + Retail + Consig
+    var aggGlobal = aggWH['Jawa Timur'] + aggWH['Bali'] + aggWH['Jakarta']
+                  + aggOnlineBali + aggOnlineJkt + aggRetail + aggConsig;
 
     var summaryEl = document.getElementById('scStockSummary');
     if (summaryEl) {
@@ -5032,12 +5037,14 @@ function scRender() {
             return '<div class="kpi-card" style="border-left:3px solid ' + color + ';"><div class="kpi-label">' + icon + ' ' + label + '</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular" style="color:' + color + ';">' + fmt(value) + '</span></span></div></div>';
         }
         summaryEl.innerHTML =
-            sumCard('WH Pusat', '🏭', aggWH['Jawa Timur'], '#b45309') +
-            sumCard('WH Bali',  '🏭', aggWH['Bali'], '#059669') +
-            sumCard('WH Jakarta','🏭', aggWH['Jakarta'], '#1d4ed8') +
-            sumCard('Retail',   '🏪', aggRetail, '#0e7490') +
-            sumCard('Consig',   '📦', aggConsig, '#be185d') +
-            sumCard('Global',   '🌍', aggGlobal, '#4c1d95');
+            sumCard('WH Pusat',   '🏭', aggWH['Jawa Timur'], '#b45309') +
+            sumCard('WH Bali',    '🏭', aggWH['Bali'], '#059669') +
+            sumCard('WH Jakarta', '🏭', aggWH['Jakarta'], '#1d4ed8') +
+            sumCard('WH O.Bali',  '🛒', aggOnlineBali, '#0e7490') +
+            sumCard('WH O.Jkt',   '🛒', aggOnlineJkt, '#0369a1') +
+            sumCard('Retail',     '🏪', aggRetail, '#0e7490') +
+            sumCard('Consig',     '📦', aggConsig, '#be185d') +
+            sumCard('Global',     '🌍', aggGlobal, '#4c1d95');
     }
 
     // GAP Analysis KPI (4 cards) — based on computed status
@@ -5077,6 +5084,8 @@ function scRender() {
         h += '<th class="center">WH Pusat</th>';
         h += '<th class="center">WH Bali</th>';
         h += '<th class="center">WH Jkt</th>';
+        h += '<th class="center">WH O.Bali</th>';
+        h += '<th class="center">WH O.Jkt</th>';
         h += '<th class="center" style="' + navyBg + '">WH TOTAL</th>';
         h += '<th class="center" style="' + navyBg + '">STOK RETAIL</th>';
         h += '<th class="center" style="' + navyBg + '">STOK CONSIG</th>';
@@ -5090,8 +5099,8 @@ function scRender() {
     }
 
     var baseCols = scViewMode === 'sku' ? 6 : 5; // extra Size column in SKU mode
-    // monthCols + AVG + 3 WH (Pusat/Bali/Jkt) + WH TOTAL + 3 stok (Retail/Consig/Global) + 4 (GAP/TW/TO/Status)
-    var totalCols = baseCols + monthCols.length + 1 + 3 + 1 + 3 + 4;
+    // monthCols + AVG + 3 WH (Pusat/Bali/Jkt) + 2 WH Online (O.Bali/O.Jkt) + WH TOTAL + 3 stok + 4 (GAP/TW/TO/Status)
+    var totalCols = baseCols + monthCols.length + 1 + 3 + 2 + 1 + 3 + 4;
     var tbody = document.getElementById('scTbody');
     if (tbody) {
         if (!rows.length) {
@@ -5142,7 +5151,9 @@ function scRender() {
                     '<td class="center">' + esc(r.tier || '—') + '</td>' +
                     salesCells +
                     '<td class="center" style="color:var(--gold);background:rgba(212,162,76,0.18);font-variant-numeric:tabular-nums;">' + r.avgMonthly.toFixed(1) + '</td>' +
-                    stkCell(r.WHS) + stkCell(r.WHB) + stkCell(r.WHJ) + stkCell(r.whTotal, true) +
+                    stkCell(r.WHS) + stkCell(r.WHB) + stkCell(r.WHJ) +
+                    stkCell(r.WHOB) + stkCell(r.WHOJ) +
+                    stkCell(r.whTotal, true) +
                     stkCell(r.stokRetail, true) + stkCell(r.stokConsig, true) + stkCell(r.globalStock, true) +
                     '<td class="center" style="' + gapCls + gapBg + 'font-variant-numeric:tabular-nums;">' + fmt(Math.round(r.gap)) + '</td>' +
                     '<td class="center" style="' + twCls  + twBg  + 'font-variant-numeric:tabular-nums;">' + (r.tw >= 999 ? '0.0' : r.tw.toFixed(1)) + '</td>' +
