@@ -4580,7 +4580,7 @@ function scShowKodeBreakdown(kode, mode) {
         if (mode === 'whj') return !isOnline && isJkt;
         if (mode === 'whob') return isOnline && isBali;
         if (mode === 'whoj') return isOnline && isJkt;
-        if (mode === 'wh' || mode === 'whtotal') return !isOnline; // WH TOTAL = land WH only (Pusat+Bali+Jkt)
+        if (mode === 'wh' || mode === 'whtotal') return true; // WH TOTAL = land WH (Pusat/Bali/Jkt) + online WH (Bali/Jkt)
         if (mode === 'online') return isOnline;
         if (mode === 'global') return true; // include all WH
         if (mode === 'retail-only' || mode === 'consig') return false; // skip all WH
@@ -5066,9 +5066,10 @@ function scRender() {
     // Compute derived fields per row. Stock Control unified: globalStock includes
     // WH Online (Bali + Jkt) since Online sub-tab is merged into Retail.
     Object.values(byKK).forEach(function(r) {
-        r.whTotal = r.WHS + r.WHB + r.WHJ;
         r.whOnlineTotal = r.WHOB + r.WHOJ;
-        r.globalStock = r.whTotal + r.whOnlineTotal + r.stokRetail + r.stokConsig;
+        // WH TOTAL = land WH (Pusat/Bali/Jkt) + online WH (Bali/Jkt) — unified
+        r.whTotal = r.WHS + r.WHB + r.WHJ + r.WHOB + r.WHOJ;
+        r.globalStock = r.whTotal + r.stokRetail + r.stokConsig;
         r.total = r.globalStock; // for compat
     });
 
