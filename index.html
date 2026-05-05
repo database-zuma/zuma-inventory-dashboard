@@ -5204,7 +5204,9 @@ function scRender() {
                 var gapCls = r.gap < 0 ? 'color:#dc2626;' : (r.gap === 0 ? 'color:var(--fg-soft);' : 'color:#16a34a;');
                 var twCls  = noSales ? 'color:var(--fg-soft);' : (r.tw < 2 ? 'color:#dc2626;' : (r.tw < 4 ? 'color:#d97706;' : 'color:#16a34a;'));
                 var toCls  = noSales ? 'color:var(--fg-soft);' : (r.to < 1 ? 'color:#dc2626;' : (r.to < 2 ? 'color:#d97706;' : 'color:#16a34a;'));
-                var rowKodeUpper = String(r.kode || r.kode_kecil || '').toUpperCase();
+                // SKU view = per-size click (use kode_kecil for size-specific breakdown);
+                // KodeKecil view = article-level click (use kode for all-sizes breakdown)
+                var rowKodeUpper = String((scViewMode === 'sku' ? (r.kode_kecil || r.kode) : (r.kode || r.kode_kecil)) || '').toUpperCase();
                 function stkCell(v, highlight, cellMode) {
                     var bg = highlight ? 'background:var(--navy-soft);' : '';
                     var cls = v < 0 ? 'color:#ef4444;' : (v === 0 ? 'color:var(--fg-soft);' : '');
