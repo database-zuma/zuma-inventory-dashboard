@@ -4641,7 +4641,24 @@ function scShowKodeBreakdown(kode, mode) {
             });
         });
     }
-    // Konsinyasi rows
+    // Konsinyasi rows — Tipe = partner name (Pepito, AEON, Sogo, dll) bukan generic "Konsinyasi"
+    function _consigPartner(store) {
+        var s = String(store || '').toLowerCase();
+        if (s.indexOf('pepito') !== -1) return 'Pepito';
+        if (s.indexOf('aeon') !== -1) return 'AEON';
+        if (s.indexOf('sogo') !== -1) return 'Sogo';
+        if (s.indexOf('grand lucky') !== -1 || s.indexOf('grandlucky') !== -1) return 'Grand Lucky';
+        if (s.indexOf('bintang') !== -1) return 'Bintang';
+        if (s.indexOf('royal surf') !== -1) return 'Royal Surf';
+        if (s.indexOf('clandy') !== -1) return "Clandy's";
+        if (s.indexOf('padma') !== -1) return 'Padma';
+        if (s.indexOf('cilubaa') !== -1 || s.indexOf('cilukba') !== -1) return 'Cilukba';
+        if (s.indexOf('sonobebe') !== -1) return 'Sonobebe';
+        if (s.indexOf('paveels') !== -1 || s.indexOf('pavels') !== -1) return 'Paveels';
+        if (s.indexOf('omosando') !== -1) return 'Omosando';
+        if (s.indexOf('bali united') !== -1) return 'Bali United';
+        return 'Konsinyasi';
+    }
     if (includeConsig) {
         var consigArr = (typeof consignmentStockItems !== 'undefined') ? consignmentStockItems : [];
         consigArr.forEach(function(it) {
@@ -4651,7 +4668,7 @@ function scShowKodeBreakdown(kode, mode) {
             Object.keys(ss).forEach(function(s) {
                 var qty = Number(ss[s]) || 0;
                 if (!qty) return;
-                getRow('Konsinyasi', s, it.kode_kecil, it.size || '').CONSIG += qty;
+                getRow(_consigPartner(s), s, it.kode_kecil, it.size || '').CONSIG += qty;
             });
         });
     }
@@ -4661,9 +4678,15 @@ function scShowKodeBreakdown(kode, mode) {
         return r;
     }).filter(function(r){ return r.total !== 0; });
 
-    var tipeOrder = { 'Warehouse': 1, 'WH Online': 1, 'Retail': 2, 'Konsinyasi': 3 };
+    var tipeOrder = { 'Warehouse': 1, 'WH Online': 1, 'Retail': 2 };
+    var consigOrder = ['Pepito','AEON','Sogo','Grand Lucky','Bintang','Royal Surf',"Clandy's",'Padma','Cilukba','Sonobebe','Paveels','Omosando','Bali United','Konsinyasi'];
+    function _orderOf(t) {
+        if (tipeOrder[t]) return tipeOrder[t];
+        var ci = consigOrder.indexOf(t);
+        return ci >= 0 ? (3 + ci * 0.01) : 9;  // consig partners group together (3.x)
+    }
     rows.sort(function(a,b){
-        var ta = tipeOrder[a.tipe] || 9, tb = tipeOrder[b.tipe] || 9;
+        var ta = _orderOf(a.tipe), tb = _orderOf(b.tipe);
         if (ta !== tb) return ta - tb;
         if (a.lokasi !== b.lokasi) return a.lokasi.localeCompare(b.lokasi);
         if ((a.kodeKecil || '') !== (b.kodeKecil || '')) return (a.kodeKecil || '').localeCompare(b.kodeKecil || '');
@@ -4718,15 +4741,16 @@ function scShowKodeBreakdown(kode, mode) {
     rows.forEach(function(r){ if (r.kodeKecil) uniqueKK[r.kodeKecil] = true; });
     var showKodeKecil = Object.keys(uniqueKK).length > 1;
 
+    var thStyle = 'background:#002A3A;color:#fff;font-weight:700;font-size:11px;letter-spacing:0.05em;';
     var html = '<table class="data" style="width:100%;font-size:12px;">' +
         '<thead><tr>' +
-        '<th>Tipe</th><th>Lokasi</th>' +
-        (showKodeKecil ? '<th class="center">Kode Barang</th>' : '') +
-        '<th class="center">Size</th>';
+        '<th style="' + thStyle + '">Tipe</th><th style="' + thStyle + '">Lokasi</th>' +
+        (showKodeKecil ? '<th class="center" style="' + thStyle + '">Kode Barang</th>' : '') +
+        '<th class="center" style="' + thStyle + '">Size</th>';
     entCols.forEach(function(e){
-        html += '<th class="center">' + (e === 'CONSIG' ? 'Konsinyasi' : e) + '</th>';
+        html += '<th class="center" style="' + thStyle + '">' + (e === 'CONSIG' ? 'Konsinyasi' : e) + '</th>';
     });
-    html += '<th class="center" style="background:rgba(212,162,76,0.18);color:var(--navy);">TOTAL</th></tr></thead><tbody>';
+    html += '<th class="center" style="' + thStyle + 'background:rgba(212,162,76,0.85);">TOTAL</th></tr></thead><tbody>';
 
     var lastTipe = null;
     rows.forEach(function(r){
