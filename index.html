@@ -4741,8 +4741,27 @@ function scShowKodeBreakdown(kode, mode) {
     rows.forEach(function(r){ if (r.kodeKecil) uniqueKK[r.kodeKecil] = true; });
     var showKodeKecil = Object.keys(uniqueKK).length > 1;
 
+    // Summary banner: total per entity + grand total (must match table data exactly)
+    var entTotals = {};
+    entCols.forEach(function(e){ entTotals[e] = 0; });
+    rows.forEach(function(r){ entCols.forEach(function(e){ entTotals[e] += (r[e] || 0); }); });
+    var grandTotal = entCols.reduce(function(s,e){ return s + entTotals[e]; }, 0);
+    var summaryHtml = '<div style="display:flex;flex-wrap:wrap;gap:8px;padding:12px 14px;background:#f8fafc;border-bottom:1px solid var(--border);">' +
+        entCols.map(function(e){
+            var label = (e === 'CONSIG' ? 'Konsinyasi' : e);
+            return '<div style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:6px 10px;min-width:80px;">' +
+                '<div style="font-size:9px;color:var(--fg-soft);font-weight:600;letter-spacing:0.4px;text-transform:uppercase;">' + label + '</div>' +
+                '<div style="font-size:15px;font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums;">' + fmt(entTotals[e]) + '</div>' +
+                '</div>';
+        }).join('') +
+        '<div style="background:rgba(212,162,76,0.18);border:1px solid rgba(212,162,76,0.6);border-radius:6px;padding:6px 12px;min-width:90px;margin-left:auto;">' +
+            '<div style="font-size:9px;color:var(--navy);font-weight:700;letter-spacing:0.4px;text-transform:uppercase;">Grand Total</div>' +
+            '<div style="font-size:17px;font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums;">' + fmt(grandTotal) + ' pairs</div>' +
+        '</div>' +
+    '</div>';
+
     var thStyle = 'background:#002A3A;color:#fff;font-weight:700;font-size:11px;letter-spacing:0.05em;';
-    var html = '<table class="data" style="width:100%;font-size:12px;">' +
+    var html = summaryHtml + '<table class="data" style="width:100%;font-size:12px;">' +
         '<thead><tr>' +
         '<th style="' + thStyle + '">Tipe</th><th style="' + thStyle + '">Lokasi</th>' +
         (showKodeKecil ? '<th class="center" style="' + thStyle + '">Kode Barang</th>' : '') +
@@ -4770,6 +4789,14 @@ function scShowKodeBreakdown(kode, mode) {
         var tCls = r.total < 0 ? 'color:#ef4444;font-weight:700;' : 'font-weight:700;color:var(--navy);';
         html += '<td class="center" style="' + tCls + 'font-variant-numeric:tabular-nums;background:rgba(212,162,76,0.08);">' + fmt(r.total) + '</td></tr>';
     });
+    // Footer TOTAL row (explicit grand total — must match summary banner)
+    var leadCols = 2 + (showKodeKecil ? 1 : 0) + 1; // Tipe + Lokasi + (Kode Barang) + Size
+    var footStyle = 'background:#002A3A;color:#fff;font-weight:800;font-size:12px;';
+    html += '<tr><td colspan="' + leadCols + '" style="' + footStyle + 'text-align:right;letter-spacing:0.05em;">TOTAL</td>';
+    entCols.forEach(function(e){
+        html += '<td class="center" style="' + footStyle + 'font-variant-numeric:tabular-nums;">' + fmt(entTotals[e]) + '</td>';
+    });
+    html += '<td class="center" style="' + footStyle + 'background:rgba(212,162,76,0.85);font-variant-numeric:tabular-nums;">' + fmt(grandTotal) + '</td></tr>';
     html += '</tbody></table>';
     body.innerHTML = html;
 }
