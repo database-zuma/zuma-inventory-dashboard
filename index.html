@@ -1219,8 +1219,8 @@ html, body {
     </label>
   </div>
 
-  <!-- Stock Summary cards removed — keep GAP KPI (clickable filter) -->
-  <div id="scStockSummary" style="display:none;"></div>
+  <!-- Stock Summary cards (compact) — follow active filters -->
+  <div id="scStockSummary" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;"></div>
 
   <!-- GAP Analysis KPI (4 cards, clickable to filter) -->
   <div id="scKpi" style="display:none;"></div>
@@ -5091,70 +5091,29 @@ function scRender() {
     });
     scFiltered = rows;
 
-    // Summary cards: WH Pusat / WH Bali / WH Jakarta / WH O.Bali / WH O.Jkt / Retail / Consig / Global
-    // Online warehouse merged into Global (Stock Control unified Retail+Online)
-    var ent = typeof currentEntity !== 'undefined' ? currentEntity : 'DDD';
-    var aggWH = { 'Jawa Timur':0, 'Bali':0, 'Jakarta':0 };
-    var aggOnlineBali = 0, aggOnlineJkt = 0, aggRetail = 0, aggConsig = 0;
-    var entData = (allData || {})[ent] || {};
-    (entData.warehouse || []).forEach(function(it) {
-        if (!it.store_stock) return;
-        Object.keys(it.store_stock).forEach(function(wh) {
-            var wl = wh.toLowerCase();
-            var qty = Number(it.store_stock[wh]) || 0;
-            // ONLINE matches must come BEFORE the bali/jakarta catch-alls
-            if (wl.indexOf('online') !== -1 && wl.indexOf('bali') !== -1) {
-                if (!scAreaFilter || scAreaFilter === 'Bali') aggOnlineBali += qty;
-            }
-            else if (wl.indexOf('online') !== -1 && (wl.indexOf('jakarta') !== -1 || wl.indexOf('jkt') !== -1)) {
-                if (!scAreaFilter || scAreaFilter === 'Jakarta') aggOnlineJkt += qty;
-            }
-            else if (wl.indexOf('bali') !== -1 || wl.indexOf('gatsu') !== -1) {
-                if (!scAreaFilter || scAreaFilter === 'Bali') aggWH['Bali'] += qty;
-            }
-            else if (wl.indexOf('jakarta') !== -1 || wl.indexOf('pluit') !== -1) {
-                if (!scAreaFilter || scAreaFilter === 'Jakarta') aggWH['Jakarta'] += qty;
-            }
-            else if (wl.indexOf('pusat') !== -1 || wl.indexOf('surabaya') !== -1) {
-                if (!scAreaFilter || scAreaFilter === 'Jawa Timur' || scAreaFilter === 'Jatim') aggWH['Jawa Timur'] += qty;
-            }
-        });
+    // Summary cards (4 compact, follow filter): Stok WH / Stok Toko / Stok Consi / Stok Global
+    // Computed from scFiltered (post-filter rows) so cards reflect active filters
+    var totalWH = 0, totalToko = 0, totalConsi = 0, totalGlobal = 0;
+    scFiltered.forEach(function(r) {
+        totalWH     += (r.WHS || 0) + (r.WHB || 0) + (r.WHJ || 0) + (r.WHOB || 0) + (r.WHOJ || 0);
+        totalToko   += r.stokRetail || 0;
+        totalConsi  += r.stokConsig || 0;
+        totalGlobal += r.globalStock || 0;
     });
-    (entData.retail || []).forEach(function(it) {
-        if (!it.store_stock) return;
-        Object.keys(it.store_stock).forEach(function(s) {
-            var sl = s.toLowerCase();
-            if (sl.indexOf('warehouse') !== -1) return;
-            if (scAreaFilter && !_scStoreInArea(s, scAreaFilter)) return;
-            aggRetail += Number(it.store_stock[s]) || 0;
-        });
-    });
-    (typeof consignmentStockItems !== 'undefined' ? consignmentStockItems : []).forEach(function(it){
-        if (String(it.entity || '').toUpperCase() !== ent.toUpperCase()) return;
-        if (!it.store_stock) return;
-        Object.keys(it.store_stock).forEach(function(s) {
-            if (scAreaFilter && !_scConsigStoreInArea(s, scAreaFilter)) return;
-            aggConsig += Number(it.store_stock[s]) || 0;
-        });
-    });
-    // Stock Control unified: Global = WH Pusat+Bali+Jkt + WH Online Bali+Jkt + Retail + Consig
-    var aggGlobal = aggWH['Jawa Timur'] + aggWH['Bali'] + aggWH['Jakarta']
-                  + aggOnlineBali + aggOnlineJkt + aggRetail + aggConsig;
 
     var summaryEl = document.getElementById('scStockSummary');
     if (summaryEl) {
-        function sumCard(label, icon, value, color) {
-            return '<div class="kpi-card" style="border-left:3px solid ' + color + ';"><div class="kpi-label">' + icon + ' ' + label + '</div><div><span class="kpi-value-wrap"><span class="kpi-value tabular" style="color:' + color + ';">' + fmt(value) + '</span></span></div></div>';
+        function sumCardCompact(label, icon, value, color) {
+            return '<div style="border:1px solid var(--border);border-left:3px solid ' + color + ';border-radius:6px;padding:8px 10px;background:#fff;">'
+                + '<div style="font-size:10px;color:var(--fg-soft);font-weight:600;letter-spacing:0.3px;text-transform:uppercase;">' + icon + ' ' + label + '</div>'
+                + '<div style="font-size:18px;font-weight:700;color:' + color + ';font-variant-numeric:tabular-nums;margin-top:2px;">' + fmt(value) + '</div>'
+                + '</div>';
         }
         summaryEl.innerHTML =
-            sumCard('WH Pusat',   '🏭', aggWH['Jawa Timur'], '#b45309') +
-            sumCard('WH Bali',    '🏭', aggWH['Bali'], '#059669') +
-            sumCard('WH Jakarta', '🏭', aggWH['Jakarta'], '#1d4ed8') +
-            sumCard('WH O.Bali',  '🛒', aggOnlineBali, '#0e7490') +
-            sumCard('WH O.Jkt',   '🛒', aggOnlineJkt, '#0369a1') +
-            sumCard('Retail',     '🏪', aggRetail, '#0e7490') +
-            sumCard('Consig',     '📦', aggConsig, '#be185d') +
-            sumCard('Global',     '🌍', aggGlobal, '#4c1d95');
+            sumCardCompact('Stok WH',     '🏭', totalWH,     '#1d4ed8') +
+            sumCardCompact('Stok Toko',   '🏪', totalToko,   '#0e7490') +
+            sumCardCompact('Stok Consi',  '📦', totalConsi,  '#be185d') +
+            sumCardCompact('Stok Global', '🌍', totalGlobal, '#4c1d95');
     }
 
     // GAP Analysis KPI (4 cards) — based on computed status
