@@ -1020,7 +1020,7 @@ html, body {
       <label class="filter-label" for="gfArea">Area</label>
       <select id="gfArea" class="filter-select" onchange="gfOnChange('area')"><option value="">Semua</option></select>
     </div>
-    <div class="filter-group">
+    <div class="filter-group" id="fgStore">
       <label class="filter-label" for="gfStore">Toko / WH</label>
       <select id="gfStore" class="filter-select" onchange="gfOnChange('store')"><option value="">Semua</option></select>
     </div>
@@ -1200,6 +1200,19 @@ html, body {
         <option value="normal">2-4 (Normal)</option>
         <option value="high">&gt;4 (High)</option>
       </select>
+      <span style="width:1px;height:24px;background:var(--border);margin:0 4px;"></span>
+      <label class="filter-label" style="margin:0;">Series</label>
+      <div id="scSeriesMS" style="position:relative;min-width:160px;">
+        <button type="button" id="scSeriesMSBtn" onclick="scMSToggle(event)" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:#fff;font-size:12px;cursor:pointer;text-align:left;">Semua Series</button>
+        <div id="scSeriesMSPanel" style="display:none;position:absolute;top:calc(100% + 4px);left:0;min-width:240px;max-height:280px;overflow:hidden;background:#fff;border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.12);z-index:1000;">
+          <input type="text" id="scSeriesMSSearch" placeholder="🔍 Cari series..." onkeyup="scMSFilter(this.value)" style="width:100%;padding:8px;border:0;border-bottom:1px solid var(--border);font-size:12px;outline:none;box-sizing:border-box;">
+          <div style="padding:4px 8px;border-bottom:1px solid var(--border);display:flex;gap:8px;font-size:11px;">
+            <a href="javascript:scMSSelectAll()" style="color:var(--navy);">Pilih Semua</a>
+            <a href="javascript:scMSClear()" style="color:#dc2626;">Reset</a>
+          </div>
+          <div id="scSeriesMSList" style="max-height:200px;overflow-y:auto;padding:4px 0;"></div>
+        </div>
+      </div>
     </div>
     <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--fg-muted);">
       <input type="checkbox" id="scHideZero" checked onchange="scRender()"> Sembunyikan total=0
@@ -1426,9 +1439,11 @@ function switchHubTab(tab) {
     document.querySelectorAll('.tab-btn[data-tab]').forEach(function(b){ b.classList.toggle('active', b.dataset.tab === tab); });
     document.querySelectorAll('.tab-content').forEach(function(s){ s.classList.toggle('active', s.dataset.tab === tab); });
     if (history.replaceState) history.replaceState(null, '', '#' + tab);
-    // Hide Channel filter on Stock Control tab — Stock Control aggregates all channels regardless
+    // Hide Channel + Toko/WH filters on Stock Control tab — Stock Control filters: area/gender/series/tier/version/search
     var fgChannel = document.getElementById('fgChannel');
     if (fgChannel) fgChannel.style.display = (tab === 'stockcontrol') ? 'none' : '';
+    var fgStore = document.getElementById('fgStore');
+    if (fgStore) fgStore.style.display = (tab === 'stockcontrol') ? 'none' : '';
     // Trigger tab-specific init once data loaded
     if (!_tabsInitialized[tab] && _dataLoaded) {
         _tabsInitialized[tab] = true;
@@ -4735,21 +4750,105 @@ function scSwitchType(type) {
 }
 
 function scGetSourceItems() {
-    var ent = typeof currentEntity !== 'undefined' ? currentEntity : 'DDD';
-    var entData = (allData || {})[ent] || {};
-    if (scCurrentType === 'retail') {
-        return entData.retail || [];
-    } else {
-        // Online = WH online bali + online jakarta aggregation (from warehouse items)
-        return (entData.warehouse || []).filter(function(it) {
-            if (!it.store_stock) return false;
-            return Object.keys(it.store_stock).some(function(s){
-                var sl = s.toLowerCase();
-                return sl.indexOf('online bali') !== -1 || sl.indexOf('online jakarta') !== -1 || sl.indexOf('online jkt') !== -1;
-            });
+    // Stock Control unified — ignore gf.entity, aggregate items from ALL entities (DDD/LJBB/MBB/UBB).
+    // Used for filter dropdown population. Dedup by sku.
+    var allItems = [], seen = {};
+    ['DDD','LJBB','MBB','UBB'].forEach(function(ent) {
+        var ed = (allData || {})[ent] || {};
+        (ed.retail || []).concat(ed.warehouse || []).forEach(function(it){
+            var k = it.sku || it.kode_kecil || '';
+            if (!k || seen[k]) return;
+            seen[k] = true;
+            allItems.push(it);
         });
-    }
+    });
+    (typeof consignmentStockItems !== 'undefined' ? consignmentStockItems : []).forEach(function(it){
+        var k = it.sku || it.kode_kecil || '';
+        if (!k || seen[k]) return;
+        seen[k] = true;
+        allItems.push(it);
+    });
+    return allItems;
 }
+
+// Stock Control Series multi-select state + helpers (search + checkbox, override gf.series)
+var scSeriesArr = [];
+
+function scMSToggle(evt) {
+    var panel = document.getElementById('scSeriesMSPanel');
+    if (!panel) return;
+    panel.style.display = (panel.style.display === 'block') ? 'none' : 'block';
+    if (evt && evt.stopPropagation) evt.stopPropagation();
+}
+
+function scMSFilter(query) {
+    var list = document.getElementById('scSeriesMSList');
+    if (!list) return;
+    var q = (query || '').toLowerCase();
+    Array.prototype.forEach.call(list.children, function(item) {
+        var name = (item.dataset.value || '').toLowerCase();
+        item.style.display = (!q || name.indexOf(q) !== -1) ? 'flex' : 'none';
+    });
+}
+
+function scMSPopulate() {
+    var items = scGetSourceItems();
+    var seriesSet = {};
+    items.forEach(function(it){ if (it.series) seriesSet[it.series] = true; });
+    var keys = Object.keys(seriesSet).sort();
+    var list = document.getElementById('scSeriesMSList');
+    if (!list) return;
+    list.innerHTML = keys.map(function(s){
+        var checked = scSeriesArr.indexOf(s) >= 0 ? 'checked' : '';
+        var safe = String(s).replace(/'/g, "&#39;");
+        return '<label data-value="' + esc(s) + '" style="display:flex;align-items:center;gap:6px;padding:4px 10px;font-size:12px;cursor:pointer;hover:background:#f1f5f9;"><input type="checkbox" ' + checked + ' onchange="scMSToggleItem(\'' + safe + '\', this.checked)"> ' + esc(s) + '</label>';
+    }).join('');
+    scMSUpdateBtnLabel();
+}
+
+function scMSToggleItem(value, checked) {
+    if (checked && scSeriesArr.indexOf(value) < 0) scSeriesArr.push(value);
+    else if (!checked) scSeriesArr = scSeriesArr.filter(function(v){ return v !== value; });
+    scMSUpdateBtnLabel();
+    if (typeof scRender === 'function') scRender();
+}
+
+function scMSSelectAll() {
+    var list = document.getElementById('scSeriesMSList');
+    if (!list) return;
+    scSeriesArr = [];
+    Array.prototype.forEach.call(list.querySelectorAll('label'), function(el){
+        var v = el.dataset.value;
+        if (v) scSeriesArr.push(v);
+        var cb = el.querySelector('input[type=checkbox]'); if (cb) cb.checked = true;
+    });
+    scMSUpdateBtnLabel();
+    if (typeof scRender === 'function') scRender();
+}
+
+function scMSClear() {
+    scSeriesArr = [];
+    var list = document.getElementById('scSeriesMSList');
+    if (list) Array.prototype.forEach.call(list.querySelectorAll('input[type=checkbox]'), function(cb){ cb.checked = false; });
+    scMSUpdateBtnLabel();
+    if (typeof scRender === 'function') scRender();
+}
+
+function scMSUpdateBtnLabel() {
+    var btn = document.getElementById('scSeriesMSBtn');
+    if (!btn) return;
+    var n = scSeriesArr.length;
+    if (!n) btn.textContent = 'Semua Series';
+    else if (n <= 2) btn.textContent = scSeriesArr.join(', ');
+    else btn.textContent = n + ' series dipilih';
+}
+
+// Click outside to close panel
+document.addEventListener('click', function(e) {
+    var ms = document.getElementById('scSeriesMS');
+    var panel = document.getElementById('scSeriesMSPanel');
+    if (ms && panel && !ms.contains(e.target)) panel.style.display = 'none';
+});
 
 function scPopulateFilters() {
     var items = scGetSourceItems();
@@ -4759,6 +4858,8 @@ function scPopulateFilters() {
         if (it.gender) genders[it.gender] = true;
         if (it.series) series[it.series] = true;
     });
+    // Populate Stock Control Series multi-select widget
+    scMSPopulate();
     function fill(id, map, sortFn) {
         var el = document.getElementById(id); if (!el) return;
         var cur = el.value;
@@ -4913,7 +5014,12 @@ function scRender() {
         if (hideZero && r.globalStock === 0) return false;
         if (tier && r.tier !== tier) return false;
         if (gender && r.gender !== gender) return false;
-        if (series && r.series !== series) return false;
+        // Series: prefer Stock Control multi-select widget; fallback to global gfSeries
+        if (scSeriesArr.length) {
+            if (scSeriesArr.indexOf(r.series) === -1) return false;
+        } else if (series && r.series !== series) {
+            return false;
+        }
         if (version && String(r.version) !== version) return false;
         if (q) {
             var hay = (r.kode + '|' + r.kode_kecil + '|' + r.name).toLowerCase();
