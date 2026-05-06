@@ -2860,6 +2860,7 @@ function buildStockByAreaRows(area) {
     });
     var areaMap = storeAreaMap || {};
     var byKK = {};
+    var ch = String((typeof gf !== 'undefined' && gf && gf.channel) || '').toLowerCase();
     function ensure(kk, it) {
         if (!byKK[kk]) {
             byKK[kk] = {
@@ -2875,11 +2876,33 @@ function buildStockByAreaRows(area) {
                 whQty: 0, whStores: {},
                 whLocalQty: 0, whLocalStores: {},
                 whSQty: 0, whSStores: {},
+                whBAllQty: 0, whJAllQty: 0, whSAllQty: 0, // global WH buckets (across all areas) untuk channel=warehouse
                 tokoQty: 0, tokoStores: {}, consigQty: 0, consigStores: {}
             };
         }
         return byKK[kk];
     }
+    // Phase 1: collect global WH buckets per kode_kecil (semua area, untuk channel=warehouse mode)
+    var globalWhByKK = {};
+    whItems.forEach(function(it) {
+        var kk = String(it.kode_kecil || '').toLowerCase();
+        if (!kk) return;
+        var ss = it.store_stock || {};
+        Object.keys(ss).forEach(function(wh) {
+            var qty = Number(ss[wh]) || 0;
+            if (qty <= 0) return;
+            var n = String(wh).toLowerCase();
+            if (n.indexOf('online') !== -1) return;
+            var bucket = null;
+            if (n.indexOf('pusat') !== -1 || n.indexOf('surabaya') !== -1) bucket = 'whSAllQty';
+            else if (n.indexOf('bali') !== -1 || n.indexOf('gatsu') !== -1) bucket = 'whBAllQty';
+            else if (n.indexOf('jakarta') !== -1 || n.indexOf('pluit') !== -1) bucket = 'whJAllQty';
+            if (bucket) {
+                if (!globalWhByKK[kk]) { globalWhByKK[kk] = { whSAllQty: 0, whBAllQty: 0, whJAllQty: 0, _it: it }; }
+                globalWhByKK[kk][bucket] += qty;
+            }
+        });
+    });
     whItems.forEach(function(it) {
         var kk = String(it.kode_kecil || '').toLowerCase();
         if (!kk) return;
@@ -2932,6 +2955,22 @@ function buildStockByAreaRows(area) {
             row.consigStores[st] = (row.consigStores[st] || 0) + qty;
             row.consigQty += qty;
         });
+    });
+    // Phase 2: attach global WH buckets to all rows + ensure rows for warehouse-channel mode
+    if (ch === 'warehouse') {
+        // Bring in items that have global WH stock but didn't make it into byKK via area-scoped pass
+        Object.keys(globalWhByKK).forEach(function(kk) {
+            var g = globalWhByKK[kk];
+            if (!byKK[kk] && g._it) ensure(kk, g._it);
+        });
+    }
+    Object.keys(byKK).forEach(function(kk) {
+        var g = globalWhByKK[kk];
+        if (g) {
+            byKK[kk].whSAllQty = g.whSAllQty || 0;
+            byKK[kk].whBAllQty = g.whBAllQty || 0;
+            byKK[kk].whJAllQty = g.whJAllQty || 0;
+        }
     });
     var out = [];
     Object.keys(byKK).forEach(function(kk) {
@@ -3081,11 +3120,14 @@ function renderStockByArea() {
 
     var showTokoCols = showToko ? cols.toko : [];
     var showConsigCols = showConsig ? cols.consig : [];
-    // Hide local WH untuk: Jatim (WHS = local-nya), Sumatera (cuma transit, pakai WHS aja)
+    // WAREHOUSE channel mode: tampilin 3 fixed kolom WHS + WHB + WHJ (lintas area).
+    // Else: behavior lama (local WH + WHS), Jatim/Sumatera hide local karena pakai WHS aja.
+    var isWarehouseMode = (ch === 'warehouse');
     var _hideLocalAreas = { 'Jatim': 1, 'Sumatera': 1 };
-    var showLocalWh = showWH && !_hideLocalAreas[area] && cols.whLocal.length > 0;
-    // WHS selalu tampil saat channel=warehouse (force visibility), bahkan kalau data 0
-    var showWhsCol  = showWH && (cols.whS.length > 0 || ch === 'warehouse');
+    var showLocalWh = !isWarehouseMode && showWH && !_hideLocalAreas[area] && cols.whLocal.length > 0;
+    var showWhsCol  = !isWarehouseMode && showWH && cols.whS.length > 0;
+    // 3 kolom warehouse aggregated (WHS + WHB + WHJ)
+    var showWhAgg = isWarehouseMode && showWH;
 
     var VER_W = 46, WH_COL_W = 64;
     var stickyMetaTh = [
@@ -3101,6 +3143,8 @@ function renderStockByArea() {
     // WHS comes BEFORE local WH (WHB/WHJ/etc).
     var WHS_LEFT = cumL;
     var WHB_LEFT = cumL + (showWhsCol ? WH_COL_W : 0);
+    // Warehouse-mode aggregate columns (3 fixed: WHS / WHB / WHJ)
+    var WAGG_S_LEFT = cumL, WAGG_B_LEFT = cumL + WH_COL_W, WAGG_J_LEFT = cumL + WH_COL_W * 2;
 
     var thead = document.getElementById('sbaThead');
     if (thead) {
@@ -3118,6 +3162,13 @@ function renderStockByArea() {
         if (showLocalWh) {
             row1 += '<th style="' + metaStyle + 'text-align:center;position:sticky;top:0;left:' + WHB_LEFT + 'px;z-index:6;min-width:' + WH_COL_W + 'px;max-width:' + WH_COL_W + 'px;width:' + WH_COL_W + 'px;border-right:2px solid ' + HEADER_BG + ';background:linear-gradient(180deg,' + HEADER_BG + ' 0%,#003c53 100%);color:#00E273;">' + _sbaEsc(whLocalLabel) + '</th>';
         }
+        // Warehouse-mode 3 fixed agg columns (WHS / WHB / WHJ)
+        if (showWhAgg) {
+            var whAggStyle = 'background:linear-gradient(180deg,' + HEADER_BG + ' 0%,#003c53 100%);color:#00E273;';
+            row1 += '<th style="' + metaStyle + whAggStyle + 'text-align:center;position:sticky;top:0;left:' + WAGG_S_LEFT + 'px;z-index:6;min-width:' + WH_COL_W + 'px;max-width:' + WH_COL_W + 'px;width:' + WH_COL_W + 'px;border-right:1px solid ' + HEADER_BG + ';" title="Warehouse Pusat">WHS</th>';
+            row1 += '<th style="' + metaStyle + whAggStyle + 'text-align:center;position:sticky;top:0;left:' + WAGG_B_LEFT + 'px;z-index:6;min-width:' + WH_COL_W + 'px;max-width:' + WH_COL_W + 'px;width:' + WH_COL_W + 'px;border-right:1px solid ' + HEADER_BG + ';" title="Warehouse Bali (semua)">WHB</th>';
+            row1 += '<th style="' + metaStyle + whAggStyle + 'text-align:center;position:sticky;top:0;left:' + WAGG_J_LEFT + 'px;z-index:6;min-width:' + WH_COL_W + 'px;max-width:' + WH_COL_W + 'px;width:' + WH_COL_W + 'px;border-right:2px solid ' + HEADER_BG + ';" title="Warehouse Jakarta (Pluit)">WHJ</th>';
+        }
         // Subtotal columns (Total Toko / Total Consig) — per visible channel group
         var SUBTOTAL_W = 70;
         var subtotalStyle = 'padding:6px 6px;background:linear-gradient(180deg,' + HEADER_BG + ' 0%,#003c53 100%);color:#D4A24C;font-weight:700;font-size:9.5px;text-align:center;min-width:' + SUBTOTAL_W + 'px;max-width:' + SUBTOTAL_W + 'px;width:' + SUBTOTAL_W + 'px;border-right:2px solid #cbd5e1;letter-spacing:0.08em;text-transform:uppercase;';
@@ -3129,7 +3180,7 @@ function renderStockByArea() {
         thead.innerHTML = row1;
     }
 
-    var whColCount = (showLocalWh ? 1 : 0) + (showWhsCol ? 1 : 0);
+    var whColCount = (showLocalWh ? 1 : 0) + (showWhsCol ? 1 : 0) + (showWhAgg ? 3 : 0);
     var visibleStoreCount = whColCount + showTokoCols.length + showConsigCols.length;
     // + 1 per active subtotal column (Total Toko / Total Consig)
     var subtotalCols = (showTokoCols.length ? 1 : 0) + (showConsigCols.length ? 1 : 0);
@@ -3166,10 +3217,15 @@ function renderStockByArea() {
         out += '<td style="padding:6px 8px;color:#1f2937;background:' + rowBg + ';position:sticky;left:' + leftOffsets[2] + 'px;z-index:1;border-right:1px solid #e5e7eb;border-bottom:1px solid #f1f5f9;font-size:11px;min-width:' + stickyMetaTh[2].w + 'px;max-width:' + stickyMetaTh[2].w + 'px;width:' + stickyMetaTh[2].w + 'px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + _sbaEsc(r.name) + '">' + _sbaEsc(r.name) + '</td>';
         out += '<td style="padding:6px 8px;text-align:center;color:#64748b;background:' + rowBg + ';position:sticky;left:' + leftOffsets[3] + 'px;z-index:1;border-right:1px solid #e5e7eb;border-bottom:1px solid #f1f5f9;font-size:11px;min-width:' + stickyMetaTh[3].w + 'px;max-width:' + stickyMetaTh[3].w + 'px;width:' + stickyMetaTh[3].w + 'px;">' + _sbaEsc(r.size) + '</td>';
         out += '<td style="padding:6px 8px;text-align:center;color:#334155;background:' + rowBg + ';position:sticky;left:' + leftOffsets[4] + 'px;z-index:1;border-right:1px solid #e5e7eb;border-bottom:1px solid #f1f5f9;font-size:11px;min-width:' + stickyMetaTh[4].w + 'px;max-width:' + stickyMetaTh[4].w + 'px;width:' + stickyMetaTh[4].w + 'px;">' + _sbaEsc(r.tier || '—') + '</td>';
-        var anyWh = showLocalWh || showWhsCol;
+        var anyWh = showLocalWh || showWhsCol || showWhAgg;
         out += '<td style="padding:6px 8px;text-align:center;color:#64748b;background:' + rowBg + ';position:sticky;left:' + VER_LEFT + 'px;z-index:1;border-right:' + (anyWh ? '1px solid #e5e7eb' : '2px solid #cbd5e1') + ';border-bottom:1px solid #f1f5f9;font-size:11px;min-width:' + VER_W + 'px;max-width:' + VER_W + 'px;width:' + VER_W + 'px;">' + _sbaEsc(r.version || '—') + '</td>';
         if (showWhsCol)  out += cellWhAgg(r.whSQty || 0, WHS_LEFT, !showLocalWh);
         if (showLocalWh) out += cellWhAgg(r.whLocalQty || 0, WHB_LEFT, true);
+        if (showWhAgg) {
+            out += cellWhAgg(r.whSAllQty || 0, WAGG_S_LEFT, false);
+            out += cellWhAgg(r.whBAllQty || 0, WAGG_B_LEFT, false);
+            out += cellWhAgg(r.whJAllQty || 0, WAGG_J_LEFT, true);
+        }
         // Subtotal cells — Total Toko / Total Consig (highlighted, tabular)
         var subTotalCell = function(v) {
             var c = _sbaCellColor(v);
@@ -6209,11 +6265,17 @@ function gfOnChange(field) {
         if (_gfStoreMs) _gfStoreMs.setSelected([]);
         gfPopulateStoreDropdown();
     }
-    // Area change updates Store dropdown
+    // Area change updates Store dropdown + Partner dropdown (partner filtered by area)
     if (field === 'area') {
-        gfPopulateStoreDropdown();
-        gf.store = [];
+        gf.store = []; gf.partner = '';
+        var p2 = document.getElementById('gfPartner'); if (p2) p2.value = '';
         if (_gfStoreMs) _gfStoreMs.setSelected([]);
+        // Repopulate area-dependent dropdowns (partner + store)
+        if (gf.channel === 'consignment') {
+            try { gfPopulateDependentFilters(); } catch(e) {}
+        } else {
+            gfPopulateStoreDropdown();
+        }
         // Stock Control: refetch sales aggregate scoped to selected area
         if (activeTab === 'stockcontrol' && typeof window._scRefetchSalesByArea === 'function') {
             window._scRefetchSalesByArea(gf.area);
@@ -6328,12 +6390,17 @@ function gfPopulateDependentFilters() {
     fill('gfTier', tiers, function(a,b){ return (parseInt(a)||0) - (parseInt(b)||0); });
     fill('gfGender', genders);
     fill('gfVersion', versions, function(a,b){ return (parseInt(a)||0) - (parseInt(b)||0); });
-    // Partner dropdown (only meaningful for channel=consignment)
+    // Partner dropdown (only meaningful for channel=consignment, and filtered by selected area)
     var partnersMap = {};
     if (gf.channel === 'consignment') {
         items.forEach(function(it) {
             if (!it.store_stock) return;
             Object.keys(it.store_stock).forEach(function(s){
+                if (gf.area) {
+                    var sa = (typeof getAreaFromStore === 'function') ? getAreaFromStore(s) : '';
+                    if (sa === 'Lombok') sa = 'Bali'; // rollup
+                    if (sa !== gf.area) return;
+                }
                 var p = _gfConsigPartner(s);
                 if (p && p !== 'Lainnya') partnersMap[p] = true;
             });
