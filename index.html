@@ -1713,7 +1713,7 @@ async function loadAllData() {
     // Consignment stock — Stock Control consig column + Stock On-Hand consig export
     swrGet('/api/stock/consignment').then(function(cached) {
         if (cached) {
-            consignmentStockItems = (cached && cached.data) ? cached.data : [];
+            consignmentStockItems = _normalizeConsigItems((cached && cached.data) ? cached.data : []);
             consignmentStockData = cached && cached.data ? cached : { data: [] };
             console.log('[SWR] consignment from cache: ' + consignmentStockItems.length + ' items');
             if (activeTab === 'stockcontrol') {
@@ -1723,7 +1723,7 @@ async function loadAllData() {
         }
         fetchAPI('/api/stock/consignment').then(function(consig) {
             swrSet('/api/stock/consignment', consig);
-            consignmentStockItems = (consig && consig.data) ? consig.data : [];
+            consignmentStockItems = _normalizeConsigItems((consig && consig.data) ? consig.data : []);
             consignmentStockData = consig && consig.data ? consig : { data: [] };
             console.log('[BG] consignment refreshed: ' + consignmentStockItems.length + ' items');
             if (activeTab === 'stockcontrol') {
@@ -1824,6 +1824,31 @@ document.addEventListener('DOMContentLoaded', function() {
 // === MODULE: maxstock ===
 var API_BASE = 'https://srv1346756.hstgr.cloud';
 var API_KEY = '97d25067-a2ca-44ba-ac5b-61539b627271';
+
+// Hardcoded entity overrides for consignment stores yang misclassified di backend.
+// Backend kasih Paveels stock di kedua entity (DDD + MBB). Memory CONSIG_DEPARTMENTS_MBB
+// nyatakan Paveels = MBB only — drop dari DDD-tagged items.
+var _CONSIG_STORE_ENTITY_FIX = {
+    'paveels': 'MBB',
+    'pavels':  'MBB'
+};
+function _normalizeConsigItems(items) {
+    if (!items || !items.length) return items || [];
+    return items.map(function(it) {
+        var ent = String(it.entity || '').toUpperCase();
+        if (!it.store_stock) return it;
+        var fixed = {};
+        Object.keys(it.store_stock).forEach(function(s) {
+            var sl = String(s).toLowerCase();
+            var skip = false;
+            for (var key in _CONSIG_STORE_ENTITY_FIX) {
+                if (sl.indexOf(key) !== -1 && ent !== _CONSIG_STORE_ENTITY_FIX[key]) { skip = true; break; }
+            }
+            if (!skip) fixed[s] = it.store_stock[s];
+        });
+        return Object.assign({}, it, { store_stock: fixed });
+    });
+}
 
 // Floating loading chip — shows while API requests in flight (post initial-load)
 var _apiInFlight = 0;
@@ -2719,7 +2744,7 @@ async function loadDashboardData() {
         ]);
         allData = stockData;
         storeAreaMap = storeAreasData;
-        consignmentStockItems = (consigStockData && consigStockData.data) ? consigStockData.data : [];
+        consignmentStockItems = _normalizeConsigItems((consigStockData && consigStockData.data) ? consigStockData.data : []);
         const meta = stockData['_meta'] || {};
         if (meta.snapshot_date) {
             const d = new Date(meta.snapshot_date + 'T00:00:00');
@@ -3073,6 +3098,9 @@ function renderStockByArea() {
     var hideEmpty = hEl ? hEl.checked : false;
 
     function rowVisibleTotal(r) {
+        if (ch === 'warehouse') {
+            return (r.whSAllQty || 0) + (r.whBAllQty || 0) + (r.whJAllQty || 0);
+        }
         return (showWH ? r.whQty : 0) + (showToko ? r.tokoQty : 0) + (showConsig ? r.consigQty : 0);
     }
 
