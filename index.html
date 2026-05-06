@@ -4917,8 +4917,8 @@ function _scRenderSalesBreakdown(data, viewMode, mode) {
     }
     // showSize=true when click was article-level (kodeKecil mode) → multiple sizes possible per row
     var showSize = (viewMode === 'kodeKecil');
-    var tipeOrder = ['WHOLESALE','ONLINE','KONSINYASI','RETAIL','OTHER'];
-    var tipeColor = { WHOLESALE:'#a855f7', ONLINE:'#0ea5e9', KONSINYASI:'#16a34a', RETAIL:'#d97706', OTHER:'#6b7280' };
+    var tipeOrder = ['WHOLESALE','ONLINE','KONSINYASI','EVENT','RETAIL','OTHER'];
+    var tipeColor = { WHOLESALE:'#a855f7', ONLINE:'#0ea5e9', KONSINYASI:'#16a34a', EVENT:'#ec4899', RETAIL:'#d97706', OTHER:'#6b7280' };
     var tipeTotal = {};
     rows.forEach(function(r){ var t = r.tipe || 'OTHER'; tipeTotal[t] = (tipeTotal[t] || 0) + (r.qty || 0); });
     var grandTotal = rows.reduce(function(s,r){ return s + (r.qty || 0); }, 0);
