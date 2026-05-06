@@ -4594,10 +4594,11 @@ function scShowKodeBreakdown(kode, mode) {
     // kode_kecil = per-size SKU code (e.g., M1SPV213Z42); when SKU view mode user clicked, kode = kode_kecil already
     var agg = {};
     var rowName = '';
-    function getRow(tipe, lokasi, kodeKecil, size) {
+    function getRow(tipe, lokasi, kodeKecil, size, name) {
         var kk = (kodeKecil || '').toUpperCase();
         var key = tipe + '||' + lokasi + '||' + kk;
-        if (!agg[key]) agg[key] = { tipe: tipe, lokasi: lokasi, kodeKecil: kk, size: size || '', DDD: 0, MBB: 0, UBB: 0, LJBB: 0, CONSIG: 0 };
+        if (!agg[key]) agg[key] = { tipe: tipe, lokasi: lokasi, kodeKecil: kk, size: size || '', name: name || '', DDD: 0, MBB: 0, UBB: 0, LJBB: 0, CONSIG: 0 };
+        else if (name && !agg[key].name) agg[key].name = name;
         return agg[key];
     }
 
@@ -4620,7 +4621,7 @@ function scShowKodeBreakdown(kode, mode) {
                 if (!whInScope(wh)) return;
                 var isOnlineWh = String(wh).toLowerCase().indexOf('online') !== -1;
                 var label = isOnlineWh ? 'WH Online' : 'Warehouse';
-                getRow(label, wh, it.kode_kecil, it.size || '')[ent] += qty;
+                getRow(label, wh, it.kode_kecil, it.size || '', it.name || '')[ent] += qty;
             });
         });
     });
@@ -4636,7 +4637,7 @@ function scShowKodeBreakdown(kode, mode) {
                     if (String(s).toLowerCase().indexOf('warehouse') !== -1) return;
                     var qty = Number(ss[s]) || 0;
                     if (!qty) return;
-                    getRow('Retail', s, it.kode_kecil, it.size || '')[ent] += qty;
+                    getRow('Retail', s, it.kode_kecil, it.size || '', it.name || '')[ent] += qty;
                 });
             });
         });
@@ -4668,7 +4669,7 @@ function scShowKodeBreakdown(kode, mode) {
             Object.keys(ss).forEach(function(s) {
                 var qty = Number(ss[s]) || 0;
                 if (!qty) return;
-                getRow(_consigPartner(s), s, it.kode_kecil, it.size || '').CONSIG += qty;
+                getRow(_consigPartner(s), s, it.kode_kecil, it.size || '', it.name || '').CONSIG += qty;
             });
         });
     }
@@ -4765,6 +4766,7 @@ function scShowKodeBreakdown(kode, mode) {
         '<thead><tr>' +
         '<th style="' + thStyle + '">Tipe</th><th style="' + thStyle + '">Lokasi</th>' +
         (showKodeKecil ? '<th class="center" style="' + thStyle + '">Kode Barang</th>' : '') +
+        (showKodeKecil ? '<th style="' + thStyle + '">Nama Barang</th>' : '') +
         '<th class="center" style="' + thStyle + '">Size</th>';
     entCols.forEach(function(e){
         html += '<th class="center" style="' + thStyle + '">' + (e === 'CONSIG' ? 'Konsinyasi' : e) + '</th>';
@@ -4780,6 +4782,7 @@ function scShowKodeBreakdown(kode, mode) {
             '<td><span style="display:inline-block;padding:2px 8px;border-radius:3px;background:' + tipeBadge + ';color:#fff;font-size:10px;font-weight:700;">' + esc(r.tipe) + '</span></td>' +
             '<td>' + esc(r.lokasi) + '</td>' +
             (showKodeKecil ? '<td class="center" style="font-family:ui-monospace,monospace;font-size:11px;">' + esc(r.kodeKecil || '—') + '</td>' : '') +
+            (showKodeKecil ? '<td style="font-size:11px;">' + esc(r.name || '—') + '</td>' : '') +
             '<td class="center" style="font-family:ui-monospace,monospace;font-size:11px;">' + esc(r.size || '—') + '</td>';
         entCols.forEach(function(e){
             var v = r[e] || 0;
@@ -4790,7 +4793,7 @@ function scShowKodeBreakdown(kode, mode) {
         html += '<td class="center" style="' + tCls + 'font-variant-numeric:tabular-nums;background:rgba(212,162,76,0.08);">' + fmt(r.total) + '</td></tr>';
     });
     // Footer TOTAL row (explicit grand total — must match summary banner)
-    var leadCols = 2 + (showKodeKecil ? 1 : 0) + 1; // Tipe + Lokasi + (Kode Barang) + Size
+    var leadCols = 2 + (showKodeKecil ? 2 : 0) + 1; // Tipe + Lokasi + (Kode Barang + Nama Barang) + Size
     var footStyle = 'background:#002A3A;color:#fff;font-weight:800;font-size:12px;';
     html += '<tr><td colspan="' + leadCols + '" style="' + footStyle + 'text-align:right;letter-spacing:0.05em;">TOTAL</td>';
     entCols.forEach(function(e){
@@ -4813,10 +4816,10 @@ function exportKodeBreakdownCSV() {
     var allEntCols = ['DDD','LJBB','MBB','UBB','CONSIG'];
     var entCols = allEntCols.filter(function(e){ return rows.some(function(r){ return (r[e] || 0) !== 0; }); });
     function escv(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
-    var headers = ['Tipe','Lokasi','Kode Barang','Size'].concat(entCols.map(function(e){ return e === 'CONSIG' ? 'Konsinyasi' : e; })).concat(['Total']);
+    var headers = ['Tipe','Lokasi','Kode Barang','Nama Barang','Size'].concat(entCols.map(function(e){ return e === 'CONSIG' ? 'Konsinyasi' : e; })).concat(['Total']);
     var out = [headers.map(escv).join(',')];
     rows.forEach(function(r) {
-        var line = [r.tipe, r.lokasi, r.kodeKecil || '', r.size || ''].concat(entCols.map(function(e){ return r[e] || 0; })).concat([r.total]);
+        var line = [r.tipe, r.lokasi, r.kodeKecil || '', r.name || '', r.size || ''].concat(entCols.map(function(e){ return r[e] || 0; })).concat([r.total]);
         out.push(line.map(escv).join(','));
     });
     var blob = new Blob(['﻿' + out.join('\n')], { type: 'text/csv;charset=utf-8' });
@@ -4948,6 +4951,7 @@ function _scRenderSalesBreakdown(data, viewMode, mode) {
         '<th class="center" style="' + thStyle + '">Tipe</th>' +
         '<th style="' + thStyle + '">Lokasi</th>' +
         (showSize ? '<th class="center" style="' + thStyle + '">Kode Barang</th>' : '') +
+        (showSize ? '<th style="' + thStyle + '">Nama Barang</th>' : '') +
         (showSize ? '<th class="center" style="' + thStyle + '">Size</th>' : '') +
         '<th class="center" style="' + thStyle + 'background:rgba(212,162,76,0.85);">Qty</th></tr></thead><tbody>';
     var lastTipe = null;
@@ -4960,10 +4964,11 @@ function _scRenderSalesBreakdown(data, viewMode, mode) {
             '<td class="center"><span style="display:inline-block;padding:2px 8px;border-radius:3px;background:' + tColor + ';color:#fff;font-size:10px;font-weight:700;">' + esc(r.tipe || '—') + '</span></td>' +
             '<td>' + esc(r.lokasi || '—') + '</td>' +
             (showSize ? '<td class="center" style="font-family:ui-monospace,monospace;font-size:11px;">' + esc(r.kode_barang || '—') + '</td>' : '') +
+            (showSize ? '<td style="font-size:11px;">' + esc(r.nama_barang || '—') + '</td>' : '') +
             (showSize ? '<td class="center" style="font-family:ui-monospace,monospace;font-size:11px;">' + esc(r.size || '—') + '</td>' : '') +
             '<td class="center" style="font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums;background:rgba(212,162,76,0.08);">' + fmt(r.qty || 0) + '</td></tr>';
     });
-    var leadCols = 3 + (showSize ? 2 : 0);
+    var leadCols = 3 + (showSize ? 3 : 0);
     var footStyle = 'background:#002A3A;color:#fff;font-weight:800;font-size:12px;';
     html += '<tr><td colspan="' + leadCols + '" style="' + footStyle + 'text-align:right;letter-spacing:0.05em;">TOTAL</td>' +
         '<td class="center" style="' + footStyle + 'background:rgba(212,162,76,0.85);font-variant-numeric:tabular-nums;">' + fmt(grandTotal) + '</td></tr>';
@@ -4984,12 +4989,12 @@ function exportSalesBreakdownCSV() {
     var showSize = (m._viewMode === 'kodeKecil');
     function escv(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }
     var headers = ['Entitas','Tipe','Lokasi'];
-    if (showSize) headers.push('Kode Barang','Size');
+    if (showSize) headers.push('Kode Barang','Nama Barang','Size');
     headers.push('Qty');
     var out = [headers.map(escv).join(',')];
     rows.forEach(function(r){
         var line = [r.entitas || '', r.tipe || '', r.lokasi || ''];
-        if (showSize) line.push(r.kode_barang || '', r.size || '');
+        if (showSize) line.push(r.kode_barang || '', r.nama_barang || '', r.size || '');
         line.push(r.qty || 0);
         out.push(line.map(escv).join(','));
     });
