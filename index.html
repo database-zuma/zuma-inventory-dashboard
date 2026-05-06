@@ -1765,13 +1765,27 @@ async function loadAllData() {
     });
 
     // Stock Control: refetch sales aggregate filtered by area (used when gf.area changes)
+    // In-memory cache per-area: skip refetch kalau area udah pernah di-fetch (data 5min TTL backend)
+    window._scSalesByAreaCache = {};
     window._scRefetchSalesByArea = function(area) {
+        var areaKey = area || '_all';
+        // Cache hit: pakai cached map, render langsung
+        if (window._scSalesByAreaCache[areaKey]) {
+            window.scSalesMap = window._scSalesByAreaCache[areaKey];
+            if (activeTab === 'stockcontrol') {
+                if (scSubTab === 'online' && typeof scoRender === 'function') scoRender();
+                else if (typeof scRender === 'function') scRender();
+            }
+            return Promise.resolve();
+        }
         var qs = area ? ('?area=' + encodeURIComponent(area)) : '';
         return Promise.all([
             fetchAPI('/api/sales/aggregate' + qs).catch(function(){ return {}; }),
             fetchAPI('/api/sales/aggregate-online' + qs).catch(function(){ return {}; })
         ]).then(function(res) {
-            window.scSalesMap = { retail: res[0] || {}, online: res[1] || {} };
+            var m = { retail: res[0] || {}, online: res[1] || {} };
+            window._scSalesByAreaCache[areaKey] = m;
+            window.scSalesMap = m;
             if (activeTab === 'stockcontrol') {
                 if (scSubTab === 'online' && typeof scoRender === 'function') scoRender();
                 else if (typeof scRender === 'function') scRender();
@@ -2877,6 +2891,14 @@ function populateSbaFilters() {
 
 function buildStockByAreaRows(area) {
     var entity = currentEntity;
+    var ch = String((typeof gf !== 'undefined' && gf && gf.channel) || '').toLowerCase();
+    // Cache key — invalidate hanya saat entity/area/channel/data snapshot berubah
+    var _sbaSnap = (allData['_meta'] || {}).snapshot_date || '';
+    var _sbaConsigSnap = (typeof consignmentStockData !== 'undefined' && consignmentStockData && consignmentStockData._meta) ? (consignmentStockData._meta.snapshot_date || '') : '';
+    var _sbaKey = entity + '|' + area + '|' + ch + '|' + _sbaSnap + '|' + _sbaConsigSnap;
+    if (window._sbaRowCache && window._sbaRowCache.key === _sbaKey && window._sbaRowCache.rows) {
+        return window._sbaRowCache.rows;
+    }
     var entData = (allData || {})[entity] || {};
     var whItems = entData.warehouse || [];
     var retItems = entData.retail || [];
@@ -2885,7 +2907,6 @@ function buildStockByAreaRows(area) {
     });
     var areaMap = storeAreaMap || {};
     var byKK = {};
-    var ch = String((typeof gf !== 'undefined' && gf && gf.channel) || '').toLowerCase();
     function ensure(kk, it) {
         if (!byKK[kk]) {
             byKK[kk] = {
@@ -3003,6 +3024,7 @@ function buildStockByAreaRows(area) {
         r.total = r.whQty + r.tokoQty + r.consigQty;
         out.push(r);
     });
+    window._sbaRowCache = { key: _sbaKey, rows: out };
     return out;
 }
 
@@ -3490,10 +3512,12 @@ function selectSuggestion(kode) {
 
 // === GLOBAL SEARCH: mirror onSkuInput / showAutocomplete for the gfSearch box ===
 var _gfAcTimer;
+var _gfSearchDispatchTimer = null;
 function gfOnSearchInput(val) {
-    // Always keep gf.search in sync so other tabs still filter live
+    // Keep gf.search in sync so other tabs still filter live, but debounce the heavy dispatch
     gf.search = val || '';
-    gfDispatchToActiveTab();
+    if (_gfSearchDispatchTimer) clearTimeout(_gfSearchDispatchTimer);
+    _gfSearchDispatchTimer = setTimeout(function(){ gfDispatchToActiveTab(); }, 220);
     clearTimeout(_gfAcTimer);
     var q = (val || '').trim().toLowerCase();
     if (q.length < 3) { gfHideAutocomplete(); return; }
@@ -5253,6 +5277,7 @@ function scPopulateFilters() {
 function scRender() {
     // Stock Control unified — IGNORE gf.channel (channel filter doesn't apply to Stock Control).
     // Always aggregate from all sources (warehouse + retail + consig + online warehouses).
+    var _scT0 = performance.now();
     scCurrentType = 'retail';
     var items = scGetSourceItems();
     var q = (gf.search || '').toLowerCase().trim();
@@ -5276,6 +5301,16 @@ function scRender() {
         return null;
     }
 
+    // ============ AGGREGATION CACHE ============
+    // Cache stock aggregation per (viewMode, area, snapshot). Filter changes (search/tier/gender)
+    // ga invalidate cache → skip 400K+ iterations saat user filter ringan.
+    var _snapKey = (allData['_meta'] || {}).snapshot_date || '';
+    var _consigSnap = (typeof consignmentStockData !== 'undefined' && consignmentStockData && consignmentStockData._meta) ? (consignmentStockData._meta.snapshot_date || '') : '';
+    var _scAggKey = scViewMode + '|' + (gf.area || '_all') + '|' + _snapKey + '|' + _consigSnap;
+    var rows;
+    if (window._scAggCache && window._scAggCache.key === _scAggKey && window._scAggCache.rows) {
+        rows = window._scAggCache.rows;
+    } else {
     // Aggregation key — SKU mode: per-size (kode_kecil "b1on02z34"), KodeKecil mode: article (kode "b1on02")
     var byKK = {};
     function ensureRow(it) {
@@ -5388,7 +5423,9 @@ function scRender() {
         r.total = r.globalStock; // for compat
     });
 
-    var rows = Object.values(byKK);
+    rows = Object.values(byKK);
+    window._scAggCache = { key: _scAggKey, rows: rows };
+    } // end aggregation cache miss branch
     rows = rows.filter(function(r){
         if (hideZero && r.globalStock === 0) return false;
         if (tier && r.tier !== tier) return false;
@@ -6480,18 +6517,28 @@ function gfPopulateStoreDropdown() {
     }
 }
 
+// rAF-batched dispatch — multiple filter changes dalam 1 frame digabungin jadi 1 render
+var _gfDispatchScheduled = false;
 function gfDispatchToActiveTab() {
-    try {
-        switch (activeTab) {
-            case 'inventory':      if (typeof invRender === 'function') invRender(); if (typeof renderStockByArea === 'function') renderStockByArea(); break;
-            case 'stockcontrol':   if (typeof scRender === 'function') scRender(); break;
-            case 'stockbyarea':    if (typeof renderStockByArea === 'function') renderStockByArea(); break;
-            case 'maxstock':       if (typeof updateMaxStockAnalysis === 'function') updateMaxStockAnalysis(); break;
-            
-            case 'skusearch':      if (gf.search && typeof runSearch === 'function') { var inp = document.getElementById('skuInput'); if (inp) inp.value = gf.search; runSearch(); } break;
-            default: break;
-        }
-    } catch(e) { console.warn('gfDispatch:', e); }
+    if (_gfDispatchScheduled) return;
+    _gfDispatchScheduled = true;
+    var raf = window.requestAnimationFrame || function(cb){ return setTimeout(cb, 16); };
+    raf(function() {
+        _gfDispatchScheduled = false;
+        var t0 = performance.now();
+        try {
+            switch (activeTab) {
+                case 'inventory':      if (typeof invRender === 'function') invRender(); if (typeof renderStockByArea === 'function') renderStockByArea(); break;
+                case 'stockcontrol':   if (typeof scRender === 'function') scRender(); break;
+                case 'stockbyarea':    if (typeof renderStockByArea === 'function') renderStockByArea(); break;
+                case 'maxstock':       if (typeof updateMaxStockAnalysis === 'function') updateMaxStockAnalysis(); break;
+                case 'skusearch':      if (gf.search && typeof runSearch === 'function') { var inp = document.getElementById('skuInput'); if (inp) inp.value = gf.search; runSearch(); } break;
+                default: break;
+            }
+        } catch(e) { console.warn('gfDispatch:', e); }
+        var dt = (performance.now() - t0);
+        if (dt > 50) console.log('[gfDispatch ' + activeTab + ']', dt.toFixed(0) + 'ms');
+    });
 }
 
 // Override selectEntity to use global filter state
