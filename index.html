@@ -1078,6 +1078,10 @@ html, body {
         <option value="consignment">Consignment</option>
       </select>
     </div>
+    <div class="filter-group" id="fgPartner" style="display:none;">
+      <label class="filter-label" for="gfPartner">Partner</label>
+      <select id="gfPartner" class="filter-select" onchange="gfOnChange('partner')"><option value="">Semua</option></select>
+    </div>
     <div class="filter-group">
       <label class="filter-label" for="gfArea">Area</label>
       <select id="gfArea" class="filter-select" onchange="gfOnChange('area')"><option value="">Semua</option></select>
@@ -1649,6 +1653,7 @@ async function loadAllData() {
         assortmentMap = {};
         applyCriticalData(cachedStock, cachedAreas);
         if (overlay) overlay.style.display = 'none';
+        window._initialLoadDone = true;
         _swrShowChip('Memperbarui data…');
 
         var oldSnapshot = (cachedStock['_meta'] || {}).snapshot_date || '';
@@ -1694,6 +1699,7 @@ async function loadAllData() {
             assortmentMap = {};
             applyCriticalData(stock, storeAreas);
             if (overlay) overlay.style.display = 'none';
+            window._initialLoadDone = true;
         } catch (err) {
             console.error('Load failed:', err);
             var st = document.getElementById('loadingStatus');
@@ -1818,7 +1824,45 @@ document.addEventListener('DOMContentLoaded', function() {
 // === MODULE: maxstock ===
 var API_BASE = 'https://srv1346756.hstgr.cloud';
 var API_KEY = '97d25067-a2ca-44ba-ac5b-61539b627271';
-async function fetchAPI(path) { const r = await fetch(API_BASE + path, { headers: { 'X-API-Key': API_KEY } }); if (!r.ok) throw new Error('API ' + r.status); return r.json(); }
+
+// Floating loading chip — shows while API requests in flight (post initial-load)
+var _apiInFlight = 0;
+function _ensureLoadingChip() {
+    var c = document.getElementById('apiLoadingChip');
+    if (c) return c;
+    c = document.createElement('div');
+    c.id = 'apiLoadingChip';
+    c.style.cssText = 'position:fixed;top:14px;right:14px;z-index:300;background:rgba(0,42,58,0.92);color:#fff;padding:8px 14px 8px 12px;border-radius:20px;font-size:11.5px;font-weight:600;letter-spacing:0.04em;box-shadow:0 4px 14px rgba(0,42,58,0.25);display:none;align-items:center;gap:8px;pointer-events:none;backdrop-filter:blur(4px);';
+    c.innerHTML = '<span style="display:inline-block;width:11px;height:11px;border:2px solid rgba(255,255,255,0.35);border-top-color:#00E273;border-radius:50%;animation:spin 0.8s linear infinite;"></span><span>Memuat data…</span>';
+    if (document.body) document.body.appendChild(c);
+    else document.addEventListener('DOMContentLoaded', function(){ document.body.appendChild(c); });
+    return c;
+}
+function _showLoadingChip() {
+    _apiInFlight++;
+    var c = _ensureLoadingChip();
+    if (c) c.style.display = 'flex';
+}
+function _hideLoadingChip() {
+    _apiInFlight = Math.max(0, _apiInFlight - 1);
+    if (_apiInFlight === 0) {
+        var c = document.getElementById('apiLoadingChip');
+        if (c) c.style.display = 'none';
+    }
+}
+
+async function fetchAPI(path) {
+    // Skip chip during initial load (overlay handles that). Show chip only after first paint complete.
+    var showChip = (typeof window._initialLoadDone !== 'undefined' && window._initialLoadDone);
+    if (showChip) _showLoadingChip();
+    try {
+        const r = await fetch(API_BASE + path, { headers: { 'X-API-Key': API_KEY } });
+        if (!r.ok) throw new Error('API ' + r.status);
+        return await r.json();
+    } finally {
+        if (showChip) _hideLoadingChip();
+    }
+}
 var allData = {}, maxStockMap = {}, storeAreaMap = {};
 var currentEntity = 'DDD', currentMSType = 'warehouse';
 let fillRateChart, tierDistChart;
@@ -5951,6 +5995,7 @@ async function scoExportExcel() {
 var gf = {
     entity: 'DDD',
     channel: 'retail',   // retail | warehouse | consignment
+    partner: '',  // consig partner filter (Pepito/AEON/Sogo/etc) — only used when channel='consignment'
     area: '',
     store: [],   // multi-select: array of toko names; empty array = "Semua"
     gender: '',
@@ -6146,12 +6191,21 @@ function gfOnChange(field) {
     var el = document.getElementById('gf' + field.charAt(0).toUpperCase() + field.slice(1));
     if (!el) return;
     gf[field] = el.value;
-    // Channel change repopulates area/store dropdowns
+    // Channel change repopulates area/partner/store dropdowns + show/hide partner group
     if (field === 'channel' || field === 'entity') {
-        gfPopulateDependentFilters();
-        gf.area = ''; gf.store = [];
+        gf.partner = ''; gf.area = ''; gf.store = [];
+        var p = document.getElementById('gfPartner'); if (p) p.value = '';
         var a = document.getElementById('gfArea'); if (a) a.value = '';
         if (_gfStoreMs) _gfStoreMs.setSelected([]);
+        var fgPartner = document.getElementById('fgPartner');
+        if (fgPartner) fgPartner.style.display = (gf.channel === 'consignment') ? '' : 'none';
+        gfPopulateDependentFilters();
+    }
+    // Partner change updates Store dropdown (filter to that partner's stores)
+    if (field === 'partner') {
+        gf.store = [];
+        if (_gfStoreMs) _gfStoreMs.setSelected([]);
+        gfPopulateStoreDropdown();
     }
     // Area change updates Store dropdown
     if (field === 'area') {
@@ -6166,26 +6220,61 @@ function gfOnChange(field) {
     gfDispatchToActiveTab();
 }
 
-function gfReset() {
-    gf.channel = 'retail';
-    gf.area = '';
-    gf.store = [];   // multi-select reset
-    gf.gender = '';
-    gf.series = []; // multi-select reset
-    gf.tier = ''; gf.version = '';
-    gf.search = '';
-    var ids = { channel: 'retail', area: '', gender: '', tier: '', version: '', search: '' };
-    Object.keys(ids).forEach(function(k){
-        var el = document.getElementById('gf' + k.charAt(0).toUpperCase() + k.slice(1));
-        if (el) el.value = ids[k];
-    });
-    if (_gfStoreMs) _gfStoreMs.setSelected([]);
-    if (_gfSeriesMs) _gfSeriesMs.setSelected([]);
-    gfPopulateDependentFilters();
-    if (activeTab === 'stockcontrol' && typeof window._scRefetchSalesByArea === 'function') {
-        window._scRefetchSalesByArea('');
+// Map consig store name → partner brand
+function _gfConsigPartner(store) {
+    var s = String(store || '').toLowerCase();
+    if (s.indexOf('pepito') !== -1) return 'Pepito';
+    if (s.indexOf('aeon') !== -1) return 'AEON';
+    if (s.indexOf('sogo') !== -1) return 'Sogo';
+    if (s.indexOf('grand lucky') !== -1 || s.indexOf('grandlucky') !== -1) return 'Grand Lucky';
+    if (s.indexOf('bintang') !== -1) return 'Bintang';
+    if (s.indexOf('royal surf') !== -1) return 'Royal Surf';
+    if (s.indexOf('clandy') !== -1) return "Clandy's";
+    if (s.indexOf('padma') !== -1) return 'Padma';
+    if (s.indexOf('cilubaa') !== -1 || s.indexOf('cilukba') !== -1) return 'Cilukba';
+    if (s.indexOf('sonobebe') !== -1) return 'Sonobebe';
+    if (s.indexOf('paveels') !== -1 || s.indexOf('pavels') !== -1) return 'Paveels';
+    if (s.indexOf('omosando') !== -1) return 'Omosando';
+    if (s.indexOf('rambla') !== -1) return 'Rambla';
+    if (s.indexOf('bali united') !== -1) return 'Bali United';
+    return 'Lainnya';
+}
+
+async function gfReset() {
+    var btn = document.querySelector('.btn-reset');
+    var origText = btn ? btn.textContent : '';
+    if (btn) { btn.textContent = '⏳ Reset…'; btn.disabled = true; }
+    try {
+        // Batch-update state
+        gf.channel = 'retail';
+        gf.partner = '';
+        gf.area = '';
+        gf.store = [];
+        gf.gender = '';
+        gf.series = [];
+        gf.tier = ''; gf.version = '';
+        gf.search = '';
+        var ids = { channel: 'retail', partner: '', area: '', gender: '', tier: '', version: '', search: '' };
+        Object.keys(ids).forEach(function(k){
+            var el = document.getElementById('gf' + k.charAt(0).toUpperCase() + k.slice(1));
+            if (el) el.value = ids[k];
+        });
+        // Hide partner group on reset (channel back to retail)
+        var fgPartner = document.getElementById('fgPartner');
+        if (fgPartner) fgPartner.style.display = 'none';
+        try { if (_gfStoreMs) _gfStoreMs.setSelected([]); } catch(e) {}
+        try { if (_gfSeriesMs) _gfSeriesMs.setSelected([]); } catch(e) {}
+        // Re-populate dropdowns
+        try { gfPopulateDependentFilters(); } catch(e) { console.warn('gfReset populate:', e); }
+        // Wait for sales refetch (Stock Control) before re-render to avoid stale-data flicker
+        if (activeTab === 'stockcontrol' && typeof window._scRefetchSalesByArea === 'function') {
+            await window._scRefetchSalesByArea('');
+        }
+        // Final render with fresh state
+        try { gfDispatchToActiveTab(); } catch(e) { console.warn('gfReset dispatch:', e); }
+    } finally {
+        if (btn) { btn.textContent = origText; btn.disabled = false; }
     }
-    gfDispatchToActiveTab();
 }
 
 function _gfGetSourceItems() {
@@ -6231,10 +6320,26 @@ function gfPopulateDependentFilters() {
         el.innerHTML = '<option value="">Semua</option>' + keys.map(function(k){ return '<option>' + esc(k) + '</option>'; }).join('');
         if (keys.indexOf(cur) >= 0) el.value = cur; else el.value = '';
     }
+    // Lombok rollup ke Bali di semua tab — drop dari dropdown area
+    delete areas['Lombok'];
     fill('gfArea', areas);
     fill('gfTier', tiers, function(a,b){ return (parseInt(a)||0) - (parseInt(b)||0); });
     fill('gfGender', genders);
     fill('gfVersion', versions, function(a,b){ return (parseInt(a)||0) - (parseInt(b)||0); });
+    // Partner dropdown (only meaningful for channel=consignment)
+    var partnersMap = {};
+    if (gf.channel === 'consignment') {
+        items.forEach(function(it) {
+            if (!it.store_stock) return;
+            Object.keys(it.store_stock).forEach(function(s){
+                var p = _gfConsigPartner(s);
+                if (p && p !== 'Lainnya') partnersMap[p] = true;
+            });
+        });
+    }
+    fill('gfPartner', partnersMap);
+    var fgPartner = document.getElementById('fgPartner');
+    if (fgPartner) fgPartner.style.display = (gf.channel === 'consignment') ? '' : 'none';
     // Series + Toko go through msx widgets (multi-select)
     _initMsxWidgets();
     if (_gfSeriesMs) {
@@ -6253,6 +6358,10 @@ function gfPopulateStoreDropdown() {
             if (gf.area) {
                 var a = (typeof getAreaFromStore === 'function') ? getAreaFromStore(s) : '';
                 if (a !== gf.area) return;
+            }
+            // Partner filter (only when channel=consignment + partner picked)
+            if (gf.channel === 'consignment' && gf.partner) {
+                if (_gfConsigPartner(s) !== gf.partner) return;
             }
             stores[s] = true;
         });
