@@ -1147,10 +1147,16 @@ html, body {
         <div class="card-title" id="invTableTitle">Data Stock Retail</div>
         <div class="card-meta" id="invCountInfo">—</div>
       </div>
-      <button class="btn btn-primary" onclick="invExportContextual()" id="invExportBtn" title="Export Excel sesuai Entity + Channel aktif">
-        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>
-        <span id="invExportLabel">Export Excel</span>
-      </button>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn" onclick="exportStokPerWH(this)" id="invStokWHBtn" title="Download report Stok per WH multi-sheet (Box Detail, Pair Detail, Pivot, Summary). Data fresh dari DB — sekitar 30-45 detik.">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>
+          <span id="invStokWHBtnLabel">Stok per WH (xlsx)</span>
+        </button>
+        <button class="btn btn-primary" onclick="invExportContextual()" id="invExportBtn" title="Export Excel sesuai Entity + Channel aktif">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>
+          <span id="invExportLabel">Export Excel</span>
+        </button>
+      </div>
     </div>
     <div class="table-wrap" style="max-height:68vh;overflow:auto;">
       <table class="data" id="invTable" style="width:100%;">
@@ -4714,6 +4720,36 @@ function invExportContextual() {
     if (ch === 'consignment') return exportConsig(ent);
     if (ch === 'warehouse')   return exportStockOnHand('warehouse', ent);
     return exportStockOnHand('retail', ent); // default / channel=retail
+}
+
+// === Stok per WH multi-sheet xlsx (server-rendered, fresh dari DB) ===
+async function exportStokPerWH(btnEl) {
+    var btn   = btnEl || document.getElementById('invStokWHBtn');
+    var label = document.getElementById('invStokWHBtnLabel');
+    var origText = label ? label.textContent : '';
+    if (btn) btn.disabled = true;
+    if (label) label.textContent = 'Menyiapkan… (~30-45s)';
+    try {
+        var url = API_BASE + '/api/export/stok-per-wh';
+        var res = await fetch(url, { headers: { 'X-API-Key': API_KEY } });
+        if (!res.ok) {
+            var detail = '';
+            try { detail = (await res.json()).detail || ''; } catch(e) {}
+            throw new Error('HTTP ' + res.status + ' ' + detail);
+        }
+        var blob = await res.blob();
+        var today = new Date().toISOString().slice(0,10);
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'Stok_per_WH_' + today + '.xlsx';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+    } catch (err) {
+        alert('Gagal export Stok per WH: ' + (err && err.message ? err.message : err));
+    } finally {
+        if (btn) btn.disabled = false;
+        if (label) label.textContent = origText || 'Stok per WH (xlsx)';
+    }
 }
 
 // === Stock Control: kode-level breakdown modal (per gudang × entity) ===
