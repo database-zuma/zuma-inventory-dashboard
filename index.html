@@ -4569,8 +4569,9 @@ function invNext() { invCurrentPage++; invRender(); }
 // Route the Stock tab export button to the right per-entity/channel Excel export
 // === Minus on Hand detail modal ===
 function buildMinusOnHandRows() {
-    // Rebuild negative per-(SKU, store) rows honoring current filters on Stock Summary
-    var items = (typeof invGetSourceItems === 'function') ? invGetSourceItems() : [];
+    // Rebuild negative per-(SKU, store) rows lintas SEMUA entity (DDD/LJBB/MBB/UBB) × type
+    // (warehouse + retail + consig) — biar minus stock di entity/type manapun ke-detect.
+    // Filter ringan (search/tier/gender/series/version/store) tetep di-apply.
     var _gf = (typeof gf !== 'undefined' && gf) ? gf : {};
     var q = (_gf.search || '').toLowerCase().trim();
     var store = _gf.store || '';
@@ -4580,10 +4581,21 @@ function buildMinusOnHandRows() {
     var version = _gf.version || '';
     var normVer = typeof _normalizeVersion === 'function' ? _normalizeVersion : function(v){return v || '';};
 
-    // Aggregate per (kode_kecil × store) to avoid double-counting when same SKU appears
-    // multiple times across entity variants (e.g. DDD/MBB/UBB rows all with same kode_kecil).
+    // Build all-entity item list (warehouse + retail across DDD/LJBB/MBB/UBB) + consignment
+    var allItems = [];
+    ['DDD','LJBB','MBB','UBB'].forEach(function(ent) {
+        var ed = (typeof allData !== 'undefined' && allData[ent]) ? allData[ent] : {};
+        (ed.warehouse || []).forEach(function(it){ allItems.push(it); });
+        (ed.retail || []).forEach(function(it){ allItems.push(it); });
+    });
+    if (typeof consignmentStockItems !== 'undefined' && consignmentStockItems) {
+        consignmentStockItems.forEach(function(it){ allItems.push(it); });
+    }
+
+    // Aggregate per (kode_kecil × store) to dedup multi-entity duplicates.
+    // Net result < 0 → muncul di list. Cross-entity positives mask negatives kalau ada di store sama.
     var agg = {};
-    items.forEach(function(it) {
+    allItems.forEach(function(it) {
         if (tier && String(it.tier) !== tier) return;
         if (gender && it.gender !== gender) return;
         if (series && it.series !== series) return;
@@ -4599,8 +4611,6 @@ function buildMinusOnHandRows() {
             if (!_gfMatch(s, store)) return;
             var v = Number(ss[s]) || 0;
             if (v === 0) return;
-            // Normalize store name for aggregation key (lowercase + trim) so "Zuma PTC" and
-            // "Zuma PTC " from different entities merge into one row.
             var sNorm = String(s).trim().toLowerCase();
             var key = kk + '||' + sNorm;
             if (!agg[key]) {
@@ -4611,7 +4621,7 @@ function buildMinusOnHandRows() {
                     size: it.size || '',
                     tier: it.tier || '',
                     gender: it.gender || '',
-                    store: String(s).trim(), // display: trimmed original case
+                    store: String(s).trim(),
                     area: (typeof getAreaFromStore === 'function') ? getAreaFromStore(s) : '',
                     stock: 0
                 };
