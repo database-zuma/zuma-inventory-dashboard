@@ -3214,8 +3214,8 @@ function renderStockByArea() {
 
     var VER_W = 46, WH_COL_W = 64;
     var stickyMetaTh = [
-        { l: 'Kode Barang', w: 92,  align: 'left'   },
-        { l: 'Kode Kecil',  w: 104, align: 'left'   },
+        { l: 'Kode Kecil',  w: 92,  align: 'left'   },
+        { l: 'Kode Barang', w: 104, align: 'left'   },
         { l: 'Nama Barang', w: 210, align: 'left'   },
         { l: 'Size',        w: 46,  align: 'center' },
         { l: 'Tier',        w: 44,  align: 'center' }
@@ -3390,7 +3390,8 @@ async function exportStockByAreaXLSX() {
     var showConsigCols = showConsig ? cols.consig : [];
 
     // Build header row matching the on-screen column order
-    var headers = ['Kode Barang','Kode Kecil','Nama Barang','Size','Tier','Ver'];
+    // (r.kode = short kode → "Kode Kecil"; r.kode_kecil = full SKU → "Kode Barang")
+    var headers = ['Kode Kecil','Kode Barang','Nama Barang','Size','Tier','Ver'];
     if (showWhsCol)  headers.push('WHS');
     if (showLocalWh) headers.push(whLocalLabel);
     if (showWhAgg) { headers.push('WHS'); headers.push('WHB'); headers.push('WHJ'); }
@@ -3464,9 +3465,8 @@ async function exportStockByAreaXLSX() {
         return { wch: 11 };
     });
     ws['!cols'] = widths;
-    ws['!freeze'] = { xSplit: 6, ySplit: 1 }; // freeze meta cols + header row
-    // Better: use !freeze convention
-    ws['!views'] = [{ state: 'frozen', xSplit: 6, ySplit: 1 }];
+    // Freeze meta cols + header row, disable default gray gridlines so cell borders show clean
+    ws['!views'] = [{ state: 'frozen', xSplit: 6, ySplit: 1, showGridLines: false }];
 
     // Number format + traffic-light colors mirroring _sbaCellColor on web:
     //   q ≤ 0  → red bg/fg
