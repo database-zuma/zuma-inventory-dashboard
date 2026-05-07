@@ -1123,8 +1123,7 @@ html, body {
     <button class="tab-btn active" data-tab="stockcontrol">Stock Control</button>
     <button class="tab-btn" data-tab="maxstock">Max Stock</button>
     <button class="tab-btn" data-tab="skusearch" style="display:none;">SKU Search</button>
-    <!-- Summary Report tab removed -->
-    <button class="tab-btn" data-tab="summaryreport" style="display:none;">Summary Report</button>
+    <button class="tab-btn" data-tab="summaryreport">Summary Report</button>
   </nav>
 
 <section class="tab-content" data-tab="inventory">
@@ -1147,16 +1146,10 @@ html, body {
         <div class="card-title" id="invTableTitle">Data Stock Retail</div>
         <div class="card-meta" id="invCountInfo">—</div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <button class="btn" onclick="exportStokPerWH(this)" id="invStokWHBtn" title="Download report Stok per WH multi-sheet (Box Detail, Pair Detail, Pivot, Summary). Data fresh dari DB — sekitar 30-45 detik.">
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>
-          <span id="invStokWHBtnLabel">Stok per WH (xlsx)</span>
-        </button>
-        <button class="btn btn-primary" onclick="invExportContextual()" id="invExportBtn" title="Export Excel sesuai Entity + Channel aktif">
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>
-          <span id="invExportLabel">Export Excel</span>
-        </button>
-      </div>
+      <button class="btn btn-primary" onclick="invExportContextual()" id="invExportBtn" title="Export Excel sesuai Entity + Channel aktif">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>
+        <span id="invExportLabel">Export Excel</span>
+      </button>
     </div>
     <div class="table-wrap" style="max-height:68vh;overflow:auto;">
       <table class="data" id="invTable" style="width:100%;">
@@ -1434,8 +1427,42 @@ html, body {
   </div>
 </section>
 <section class="tab-content" data-tab="summaryreport">
-<!-- STOCK ON-HAND -->
-  <!-- Stock On-Hand exports moved to Stock tab header -->
+
+  <!-- STOK PER WH MULTI-SHEET -->
+  <section class="section">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Stok per WH — Multi-Sheet Report</div>
+        <div class="section-sub" style="margin-top:3px;">Snapshot stok semua warehouse dengan breakdown Box vs Pair, pivot per entity, detail per size. Data fresh dari DB tiap klik.</div>
+      </div>
+    </div>
+    <div class="section-body" style="display:flex;flex-direction:column;gap:14px;">
+      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start;">
+        <button class="btn btn-primary" onclick="exportStokPerWH(this)" id="invStokWHBtn" style="padding:10px 18px;font-size:13px;">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>
+          <span id="invStokWHBtnLabel">Download Stok per WH (xlsx)</span>
+        </button>
+        <div style="font-size:11px;color:var(--fg-soft);max-width:520px;line-height:1.6;">
+          ⏱ Build sekitar 30-45 detik (data 235K pair × 11 sheets). Tombol akan disabled selama proses, jangan refresh.<br>
+          📅 File auto-named <code>Stok_per_WH_YYYY-MM-DD.xlsx</code>, snapshot date sesuai hari ini.
+        </div>
+      </div>
+
+      <div style="background:var(--muted);border-radius:8px;padding:14px 18px;font-size:12px;line-height:1.7;">
+        <div style="font-weight:600;margin-bottom:8px;color:var(--fg);">Isi 11 sheets:</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:6px 18px;color:var(--fg-muted);">
+          <div>📘 <strong>Cara Baca</strong> — legenda &amp; konsep Pair vs Box</div>
+          <div>📊 <strong>Summary</strong> — total Articles / Pair-WH / Box-WH</div>
+          <div>📦 <strong>Box Detail</strong> — per kode_barang × size × area</div>
+          <div>🔢 <strong>Box Pivot (All)</strong> — agregasi semua entity</div>
+          <div>🔢 <strong>Box Pivot DDD / MBB / UBB / LJBB</strong> — per entity</div>
+          <div>👟 <strong>Pair Detail</strong> — per kode_barang × size × WH</div>
+          <div>📈 <strong>Pair Pivot</strong> — agregasi per zone</div>
+          <div>🌐 <strong>Total All Stock</strong> — kombinasi seluruh store</div>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <!-- LINK OUT TO OTHER DASHBOARDS -->
   <section class="section">
