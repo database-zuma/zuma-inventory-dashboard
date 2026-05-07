@@ -4569,33 +4569,27 @@ function invNext() { invCurrentPage++; invRender(); }
 // Route the Stock tab export button to the right per-entity/channel Excel export
 // === Minus on Hand detail modal ===
 function buildMinusOnHandRows() {
-    // Rebuild negative per-(SKU, store) rows lintas SEMUA entity (DDD/LJBB/MBB/UBB) × type
-    // (warehouse + retail + consig) — biar minus stock di entity/type manapun ke-detect.
-    // Filter ringan (search/tier/gender/series/version/store) tetep di-apply.
+    // Negative per-(SKU, store) rows untuk current scope (entity × channel) — IKUT FILTER aktif.
+    // Apply: gf.area, gf.store, gf.partner, gf.search, gf.tier, gf.gender, gf.series, gf.version
     var _gf = (typeof gf !== 'undefined' && gf) ? gf : {};
     var q = (_gf.search || '').toLowerCase().trim();
     var store = _gf.store;
+    var area = _gf.area || '';
+    var partner = _gf.partner || '';
     var tier = _gf.tier || '';
     var gender = _gf.gender || '';
     var series = _gf.series;
     var version = _gf.version || '';
     var normVer = typeof _normalizeVersion === 'function' ? _normalizeVersion : function(v){return v || '';};
 
-    // Build all-entity item list (warehouse + retail across DDD/LJBB/MBB/UBB) + consignment
-    var allItems = [];
-    ['DDD','LJBB','MBB','UBB'].forEach(function(ent) {
-        var ed = (typeof allData !== 'undefined' && allData[ent]) ? allData[ent] : {};
-        (ed.warehouse || []).forEach(function(it){ allItems.push(it); });
-        (ed.retail || []).forEach(function(it){ allItems.push(it); });
-    });
-    if (typeof consignmentStockItems !== 'undefined' && consignmentStockItems) {
-        consignmentStockItems.forEach(function(it){ allItems.push(it); });
+    var items = (typeof invGetSourceItems === 'function') ? invGetSourceItems() : [];
+    if (partner) {
+        items = items.filter(function(it){ return String(it.partner || '') === partner; });
     }
 
-    // Aggregate per (kode_kecil × store) to dedup multi-entity duplicates.
-    // Net result < 0 → muncul di list. Cross-entity positives mask negatives kalau ada di store sama.
+    // Aggregate per (kode_kecil × store) — net < 0 muncul di list.
     var agg = {};
-    allItems.forEach(function(it) {
+    items.forEach(function(it) {
         if (tier && String(it.tier) !== tier) return;
         if (gender && it.gender !== gender) return;
         if (!_gfMatch(it.series, series)) return;
@@ -4608,6 +4602,10 @@ function buildMinusOnHandRows() {
         var kk = (it.kode_kecil || '').toUpperCase();
         if (!kk) return;
         Object.keys(ss).forEach(function(s) {
+            if (area) {
+                var a = (typeof getAreaFromStore === 'function') ? getAreaFromStore(s) : '';
+                if (a !== area) return;
+            }
             if (!_gfMatch(s, store)) return;
             var v = Number(ss[s]) || 0;
             if (v === 0) return;
