@@ -3331,8 +3331,11 @@ function renderStockByArea() {
 
 // XLSX export untuk Stok per Area — mirror persis kolom yg tampil di web
 // (WHS/WHLocal aggregate, Total Toko, Total Consig subtotals, Total).
-function exportStockByAreaXLSX() {
-    if (typeof XLSX === 'undefined') { alert('XLSX library belum siap, coba lagi sebentar.'); return; }
+async function exportStockByAreaXLSX() {
+    if (typeof XLSX === 'undefined') {
+        try { await window.ensureXlsx(); }
+        catch(e) { alert('Gagal load library XLSX. Cek koneksi internet, coba lagi.'); return; }
+    }
     var area = sbaCurrentArea;
     var rows = buildStockByAreaRows(area);
     var cols = buildSbaColumns(area);
