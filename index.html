@@ -4574,10 +4574,10 @@ function buildMinusOnHandRows() {
     // Filter ringan (search/tier/gender/series/version/store) tetep di-apply.
     var _gf = (typeof gf !== 'undefined' && gf) ? gf : {};
     var q = (_gf.search || '').toLowerCase().trim();
-    var store = _gf.store || '';
+    var store = _gf.store;
     var tier = _gf.tier || '';
     var gender = _gf.gender || '';
-    var series = _gf.series || '';
+    var series = _gf.series;
     var version = _gf.version || '';
     var normVer = typeof _normalizeVersion === 'function' ? _normalizeVersion : function(v){return v || '';};
 
@@ -4598,7 +4598,7 @@ function buildMinusOnHandRows() {
     allItems.forEach(function(it) {
         if (tier && String(it.tier) !== tier) return;
         if (gender && it.gender !== gender) return;
-        if (series && it.series !== series) return;
+        if (!_gfMatch(it.series, series)) return;
         if (version && String(normVer(it.version)) !== version) return;
         if (q) {
             var hay = (String(it.kode || '') + '|' + String(it.kode_kecil || '') + '|' + String(it.name || '')).toLowerCase();
