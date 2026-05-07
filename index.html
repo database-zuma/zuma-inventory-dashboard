@@ -3468,7 +3468,18 @@ async function exportStockByAreaXLSX() {
     // Better: use !freeze convention
     ws['!views'] = [{ state: 'frozen', xSplit: 6, ySplit: 1 }];
 
-    // Number format on numeric cols
+    // Number format + traffic-light colors mirroring _sbaCellColor on web:
+    //   q ≤ 0  → red bg/fg
+    //   q ≤ 5  → amber bg/fg
+    //   q > 5  → green bg/fg
+    var COLOR_RED   = { bg: 'FEF2F2', fg: '991B1B' };
+    var COLOR_AMBER = { bg: 'FFFBEB', fg: '92400E' };
+    var COLOR_GREEN = { bg: 'ECFDF5', fg: '065F46' };
+    function colorForQty(q) {
+        if (q <= 0) return COLOR_RED;
+        if (q <= 5) return COLOR_AMBER;
+        return COLOR_GREEN;
+    }
     var range = XLSX.utils.decode_range(ws['!ref']);
     for (var R = 1; R <= range.e.r; R++) {
         for (var C = 6; C <= range.e.c; C++) {
@@ -3476,10 +3487,18 @@ async function exportStockByAreaXLSX() {
             if (!ws[addr2]) continue;
             ws[addr2].t = 'n';
             ws[addr2].z = '#,##0';
-            // Subtotal/Total columns get bold
-            if (subtotalHdrIdx[C]) {
-                ws[addr2].s = { font: { bold: true }, alignment: { horizontal: 'right' } };
-            }
+            var v = Number(ws[addr2].v) || 0;
+            var col = colorForQty(v);
+            var isSubtotal = !!subtotalHdrIdx[C];
+            ws[addr2].s = {
+                font: { color: { rgb: col.fg }, bold: isSubtotal },
+                fill: { patternType: 'solid', fgColor: { rgb: col.bg } },
+                alignment: { horizontal: isSubtotal ? 'right' : 'center', vertical: 'center' },
+                border: {
+                    right:  { style: 'thin', color: { rgb: 'F1F5F9' } },
+                    bottom: { style: 'thin', color: { rgb: 'F1F5F9' } }
+                }
+            };
         }
     }
 
