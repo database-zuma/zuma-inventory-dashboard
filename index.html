@@ -1209,7 +1209,7 @@ html, body {
         <div class="card-title">Stok per SKU</div>
         <div class="card-meta" id="sbaCountInfo">—</div>
       </div>
-      <button class="btn btn-primary" onclick="invExportContextual()" title="Export Excel sesuai Entity + Channel aktif">
+      <button class="btn btn-primary" onclick="exportStockByAreaXLSX()" title="Export Excel persis seperti tampilan tabel di sini (kolom WH agg, Total Toko/Consig, per-store)">
         <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>
         Export Excel
       </button>
@@ -3327,6 +3327,165 @@ function renderStockByArea() {
         html += '<tr><td colspan="' + totalCols + '" style="text-align:center;padding:12px;background:#fffbeb;color:#92400e;font-weight:600;font-size:11px;">Menampilkan ' + CAP + ' dari ' + filtered.length.toLocaleString('id-ID') + ' baris. Persempit pakai search / filter, atau Export CSV untuk data lengkap.</td></tr>';
     }
     tbody.innerHTML = html;
+}
+
+// XLSX export untuk Stok per Area — mirror persis kolom yg tampil di web
+// (WHS/WHLocal aggregate, Total Toko, Total Consig subtotals, Total).
+function exportStockByAreaXLSX() {
+    if (typeof XLSX === 'undefined') { alert('XLSX library belum siap, coba lagi sebentar.'); return; }
+    var area = sbaCurrentArea;
+    var rows = buildStockByAreaRows(area);
+    var cols = buildSbaColumns(area);
+    var _gf = (typeof gf !== 'undefined' && gf) ? gf : {};
+    var ch = String(_gf.channel || '').toLowerCase();
+    var showWH = true;
+    var showToko = !ch || ch === 'retail';
+    var showConsig = !ch || ch === 'consignment';
+    if (ch === 'warehouse') { showToko = false; showConsig = false; }
+    var q = (_gf.search || '').toLowerCase().trim();
+    var tierF = _gf.tier || '';
+    var verF = _gf.version || '';
+    var genderF = _gf.gender || '';
+    var hEl = document.getElementById('sbaHideEmpty');
+    var hideEmpty = hEl ? hEl.checked : false;
+
+    function rowVisibleTotal(r) {
+        var gfA = (typeof gf !== 'undefined' && gf && gf.area) ? gf.area : '';
+        var aggMode = (ch === 'warehouse') || !gfA;
+        if (aggMode) {
+            var whTot = (r.whSAllQty || 0) + (r.whBAllQty || 0) + (r.whJAllQty || 0);
+            if (ch === 'warehouse') return whTot;
+            return whTot + (showToko ? r.tokoQty : 0) + (showConsig ? r.consigQty : 0);
+        }
+        return (showWH ? r.whQty : 0) + (showToko ? r.tokoQty : 0) + (showConsig ? r.consigQty : 0);
+    }
+
+    var filtered = rows.filter(function(r) {
+        if (hideEmpty && rowVisibleTotal(r) === 0) return false;
+        if (tierF && String(r.tier) !== tierF) return false;
+        if (verF && String(r.version) !== verF) return false;
+        if (genderF && String(r.gender) !== genderF) return false;
+        if (!_gfMatch(String(r.series), _gf.series)) return false;
+        if (q) {
+            var hay = (r.kode + '|' + r.kode_kecil + '|' + r.name).toLowerCase();
+            if (hay.indexOf(q) === -1) return false;
+        }
+        return true;
+    });
+    filtered.sort(function(a, b) { return rowVisibleTotal(b) - rowVisibleTotal(a); });
+
+    var whLabelMap = { 'Bali': 'WHB', 'Jakarta': 'WHJ', 'Jatim': 'WHS', 'Batam': 'WH Batam', 'Sulawesi': 'WH Sulawesi', 'Sumatera': 'WH Sumatera' };
+    var whLocalLabel = whLabelMap[area] || ('WH ' + area);
+    var _gfAreaSel = (typeof gf !== 'undefined' && gf && gf.area) ? gf.area : '';
+    var isWarehouseMode = (ch === 'warehouse');
+    var noAreaFilter = !_gfAreaSel;
+    var showWhAgg = showWH && (isWarehouseMode || noAreaFilter);
+    var _hideLocalAreas = { 'Jatim': 1, 'Sumatera': 1 };
+    var showLocalWh = !showWhAgg && showWH && !_hideLocalAreas[area] && cols.whLocal.length > 0;
+    var showWhsCol  = !showWhAgg && showWH && cols.whS.length > 0;
+    var showTokoCols = showToko ? cols.toko : [];
+    var showConsigCols = showConsig ? cols.consig : [];
+
+    // Build header row matching the on-screen column order
+    var headers = ['Kode Barang','Kode Kecil','Nama Barang','Size','Tier','Ver'];
+    if (showWhsCol)  headers.push('WHS');
+    if (showLocalWh) headers.push(whLocalLabel);
+    if (showWhAgg) { headers.push('WHS'); headers.push('WHB'); headers.push('WHJ'); }
+    if (showTokoCols.length) headers.push('Total Toko');
+    showTokoCols.forEach(function(n) { headers.push(n); });
+    if (showConsigCols.length) headers.push('Total Consig');
+    showConsigCols.forEach(function(n) { headers.push(n); });
+    headers.push('Total');
+
+    var aoa = [headers];
+    filtered.forEach(function(r) {
+        var row = [r.kode || '', r.kode_kecil || '', r.name || '', r.size || '', r.tier || '', r.version || ''];
+        if (showWhsCol)  row.push(Number(r.whSQty || 0));
+        if (showLocalWh) row.push(Number(r.whLocalQty || 0));
+        if (showWhAgg) {
+            row.push(Number(r.whSAllQty || 0));
+            row.push(Number(r.whBAllQty || 0));
+            row.push(Number(r.whJAllQty || 0));
+        }
+        if (showTokoCols.length) row.push(Number(r.tokoQty || 0));
+        showTokoCols.forEach(function(n) { row.push(Number(r.tokoStores[n] || 0)); });
+        if (showConsigCols.length) row.push(Number(r.consigQty || 0));
+        showConsigCols.forEach(function(n) { row.push(Number(r.consigStores[n] || 0)); });
+        row.push(Number(rowVisibleTotal(r)));
+        aoa.push(row);
+    });
+
+    var ws = XLSX.utils.aoa_to_sheet(aoa);
+
+    // Styling: navy header, gold subtotal headers, freeze panes, column widths
+    var NAVY = '002A3A', GOLD = 'D4A24C', WHITE = 'FFFFFF';
+    var headerFill = { patternType: 'solid', fgColor: { rgb: NAVY } };
+    var headerFont = { bold: true, color: { rgb: WHITE }, sz: 10 };
+    var headerAlign = { horizontal: 'center', vertical: 'center', wrapText: true };
+    var headerBorder = {
+        top:    { style: 'thin', color: { rgb: '003C53' } },
+        bottom: { style: 'thin', color: { rgb: '003C53' } },
+        left:   { style: 'thin', color: { rgb: '003C53' } },
+        right:  { style: 'thin', color: { rgb: '003C53' } }
+    };
+    var subtotalHdrFont = { bold: true, color: { rgb: GOLD }, sz: 10 };
+
+    // Identify subtotal header indices
+    var subtotalHdrIdx = {};
+    headers.forEach(function(h, i) {
+        if (h === 'Total Toko' || h === 'Total Consig' || h === 'Total') subtotalHdrIdx[i] = true;
+    });
+
+    // Style header row
+    headers.forEach(function(_, c) {
+        var addr = XLSX.utils.encode_cell({ r: 0, c: c });
+        if (!ws[addr]) return;
+        ws[addr].s = {
+            font: subtotalHdrIdx[c] ? subtotalHdrFont : headerFont,
+            fill: headerFill,
+            alignment: headerAlign,
+            border: headerBorder
+        };
+    });
+
+    // Column widths
+    var widths = headers.map(function(h, i) {
+        if (i === 0) return { wch: 14 };  // Kode Barang
+        if (i === 1) return { wch: 14 };  // Kode Kecil
+        if (i === 2) return { wch: 32 };  // Nama Barang
+        if (i === 3 || i === 4 || i === 5) return { wch: 6 };  // Size/Tier/Ver
+        if (h === 'Total Toko' || h === 'Total Consig') return { wch: 11 };
+        if (h === 'Total') return { wch: 10 };
+        // Store / WH columns — wider for store names, but values are always small ints
+        if (h.length > 16) return { wch: Math.min(h.length + 2, 28) };
+        return { wch: 11 };
+    });
+    ws['!cols'] = widths;
+    ws['!freeze'] = { xSplit: 6, ySplit: 1 }; // freeze meta cols + header row
+    // Better: use !freeze convention
+    ws['!views'] = [{ state: 'frozen', xSplit: 6, ySplit: 1 }];
+
+    // Number format on numeric cols
+    var range = XLSX.utils.decode_range(ws['!ref']);
+    for (var R = 1; R <= range.e.r; R++) {
+        for (var C = 6; C <= range.e.c; C++) {
+            var addr2 = XLSX.utils.encode_cell({ r: R, c: C });
+            if (!ws[addr2]) continue;
+            ws[addr2].t = 'n';
+            ws[addr2].z = '#,##0';
+            // Subtotal/Total columns get bold
+            if (subtotalHdrIdx[C]) {
+                ws[addr2].s = { font: { bold: true }, alignment: { horizontal: 'right' } };
+            }
+        }
+    }
+
+    var wb = XLSX.utils.book_new();
+    var sheetName = 'Stok ' + area;
+    XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
+    var ent = (typeof currentEntity !== 'undefined' && currentEntity) ? currentEntity : 'DDD';
+    var dateStr = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, 'stok_per_area_' + String(area).toLowerCase() + '_' + ent + '_' + dateStr + '.xlsx');
 }
 
 function exportStockByAreaCSV() {
