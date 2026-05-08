@@ -1450,16 +1450,15 @@ html, body {
         <div class="section-title">Sales Audit — Multi-Sheet Report</div>
       </div>
     </div>
-    <div class="section-body" style="display:flex;flex-direction:column;gap:10px;">
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-        <label style="font-size:11.5px;color:var(--fg-muted);font-weight:600;">Periode:</label>
-        <input type="text" id="auditPeriodInput" placeholder="2026-01:2026-04 (kosongkan = YTD)" style="padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;width:240px;font-family:ui-monospace,monospace;">
-        <button class="btn btn-primary" onclick="exportSalesAudit(this)" id="invSalesAuditBtn" style="padding:10px 18px;font-size:13px;">
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>
-          <span id="invSalesAuditBtnLabel">Download Sales Audit (xlsx)</span>
-        </button>
-      </div>
-      <div style="font-size:10.5px;color:var(--fg-soft);">Format periode: <code>YYYY-MM</code> (1 bulan) atau <code>YYYY-MM:YYYY-MM</code> (range). Default kosong = year-to-date.</div>
+    <div class="section-body" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <label style="font-size:11.5px;color:var(--fg-muted);font-weight:600;">Dari:</label>
+      <select id="auditFromMonth" style="padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;"></select>
+      <label style="font-size:11.5px;color:var(--fg-muted);font-weight:600;">Sampai:</label>
+      <select id="auditToMonth" style="padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;"></select>
+      <button class="btn btn-primary" onclick="exportSalesAudit(this)" id="invSalesAuditBtn" style="padding:10px 18px;font-size:13px;">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M8 2v9M4 7l4 4 4-4M2 14h12"/></svg>
+        <span id="invSalesAuditBtnLabel">Download Sales Audit (xlsx)</span>
+      </button>
     </div>
   </section>
 
@@ -4930,20 +4929,53 @@ function invExportContextual() {
 }
 
 // === Sales Audit multi-sheet xlsx (server-rendered, fresh dari DB) ===
+(function _initAuditDropdowns(){
+    var MONTH_NAMES_ID = ['Januari','Februari','Maret','April','Mei','Juni',
+                          'Juli','Agustus','September','Oktober','November','Desember'];
+    function populate() {
+        var from = document.getElementById('auditFromMonth');
+        var to   = document.getElementById('auditToMonth');
+        if (!from || !to || from.options.length) return; // already populated
+        var now = new Date();
+        var curYear = now.getFullYear();
+        var curMonth = now.getMonth() + 1; // 1-12
+        // Year range: current year + 1 prev year for historical
+        var years = [curYear - 1, curYear];
+        var opts = '';
+        years.forEach(function(y) {
+            for (var m = 1; m <= 12; m++) {
+                // skip future months in current year
+                if (y === curYear && m > curMonth) continue;
+                var mm = String(m).padStart(2, '0');
+                var label = MONTH_NAMES_ID[m-1] + ' ' + y;
+                opts += '<option value="' + y + '-' + mm + '">' + label + '</option>';
+            }
+        });
+        from.innerHTML = opts;
+        to.innerHTML = opts;
+        // Default: from = Jan curYear, to = current month
+        from.value = curYear + '-01';
+        to.value   = curYear + '-' + String(curMonth).padStart(2, '0');
+    }
+    if (document.readyState !== 'loading') populate();
+    else document.addEventListener('DOMContentLoaded', populate);
+})();
+
 async function exportSalesAudit(btnEl) {
     var btn   = btnEl || document.getElementById('invSalesAuditBtn');
     var label = document.getElementById('invSalesAuditBtnLabel');
-    var input = document.getElementById('auditPeriodInput');
-    var period = input ? input.value.trim() : '';
-    if (period && !/^\d{4}-\d{2}(:\d{4}-\d{2})?$/.test(period)) {
-        alert('Format periode salah. Pakai YYYY-MM atau YYYY-MM:YYYY-MM.\nContoh: 2026-03 atau 2026-01:2026-04');
-        return;
-    }
+    var fromEl = document.getElementById('auditFromMonth');
+    var toEl   = document.getElementById('auditToMonth');
+    var fromV = fromEl ? fromEl.value : '';
+    var toV   = toEl ? toEl.value : '';
+    if (!fromV || !toV) { alert('Pilih bulan Dari & Sampai dulu.'); return; }
+    if (fromV > toV) { alert('Bulan "Dari" tidak boleh lebih besar dari "Sampai".'); return; }
+    var period = (fromV === toV) ? fromV : (fromV + ':' + toV);
     var origText = label ? label.textContent : '';
     if (btn) btn.disabled = true;
     if (label) label.textContent = 'Menyiapkan… (~30-90s)';
     try {
-        var url = API_BASE + '/api/export/sales-audit' + (period ? ('?period=' + encodeURIComponent(period)) : '');
+        var url = API_BASE + '/api/export/sales-audit?period=' + encodeURIComponent(period);
         var res = await fetch(url, { headers: { 'X-API-Key': API_KEY } });
         if (!res.ok) {
             var detail = '';
@@ -4952,7 +4984,7 @@ async function exportSalesAudit(btnEl) {
         }
         var blob = await res.blob();
         var today = new Date().toISOString().slice(0,10);
-        var fnameSafe = (period || 'YTD').replace(':', '-to-');
+        var fnameSafe = period.replace(':', '-to-');
         var a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = 'Sales_Audit_' + fnameSafe + '_' + today + '.xlsx';
