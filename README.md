@@ -3,7 +3,8 @@
 Hub dashboard — 7 tab inventory dalam 1 URL. Visual style mengikuti `zuma-sales-dashboard` (navy + accent green, top tab-nav, sales-style).
 
 ## URL
-- Production: https://database-zuma.github.io/zuma-inventory-dashboard/
+- Production: https://zuma-inventory.vercel.app/
+- Legacy (deprecated): https://database-zuma.github.io/zuma-inventory-dashboard/
 
 ## 7 Tab
 | Tab | Source repo | Visual |
