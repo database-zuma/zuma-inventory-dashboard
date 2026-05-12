@@ -1274,6 +1274,9 @@ html, body {
   <!-- Stock Summary cards (compact) — follow active filters -->
   <div id="scStockSummary" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;"></div>
 
+  <!-- Tier × WH summary table — follow active filters -->
+  <div id="scTierSummary" style="margin-bottom:12px;"></div>
+
   <!-- GAP Analysis KPI (4 cards, clickable to filter) -->
   <div id="scKpi" style="display:none;"></div>
 
@@ -5558,6 +5561,184 @@ function scPopulateFilters() {
     fill('scSeries', series);
 }
 
+// ============================================================
+// Tier × WH summary table (Stock Control)
+// Aggregates filtered rows per tier (T1, T2, T3, T4, T5, T8, Total)
+// Columns: per-WH (Box, Protol, Total Pair, %) + Global WH/Retail/Consig/All + Sales BLN Lalu / AVG 3 Month
+// Reads pre-computed fields: WHS_box/WHS_protol, WHB_box/WHB_protol, WHJ_box/WHJ_protol, WHO_box/WHO_protol,
+//                            stokRetail, stokConsig, monthlySales
+// ============================================================
+function _scRenderTierSummary(rows) {
+    var host = document.getElementById('scTierSummary');
+    if (!host) return;
+    var TIERS = ['1','2','3','4','5','8'];
+    function blank() {
+        return {
+            WHS_box:0, WHS_protol:0, WHB_box:0, WHB_protol:0,
+            WHJ_box:0, WHJ_protol:0, WHO_box:0, WHO_protol:0,
+            retail:0, consig:0,
+            salesLast:0, sales3Sum:0, sales3N:0
+        };
+    }
+    var byTier = {};
+    var total = blank();
+    TIERS.forEach(function(t){ byTier[t] = blank(); });
+    rows.forEach(function(r){
+        var t = String(r.tier || '');
+        var bucket = byTier[t]; // skip tiers not in fixed list (e.g. '0', '')
+        var groups = bucket ? [bucket, total] : [total];
+        groups.forEach(function(g){
+            g.WHS_box    += r.WHS_box    || 0;
+            g.WHS_protol += r.WHS_protol || 0;
+            g.WHB_box    += r.WHB_box    || 0;
+            g.WHB_protol += r.WHB_protol || 0;
+            g.WHJ_box    += r.WHJ_box    || 0;
+            g.WHJ_protol += r.WHJ_protol || 0;
+            g.WHO_box    += r.WHO_box    || 0;
+            g.WHO_protol += r.WHO_protol || 0;
+            g.retail     += r.stokRetail || 0;
+            g.consig     += r.stokConsig || 0;
+            var ms = r.monthlySales || [];
+            if (ms.length > 0) g.salesLast += ms[ms.length - 1] || 0;
+            // 3-month avg: average of last 3 elements available
+            var start = Math.max(0, ms.length - 3);
+            for (var i = start; i < ms.length; i++) { g.sales3Sum += ms[i] || 0; g.sales3N++; }
+        });
+    });
+    // Derived metrics per bucket
+    function derive(g) {
+        g.WHS_total = g.WHS_box + g.WHS_protol;
+        g.WHB_total = g.WHB_box + g.WHB_protol;
+        g.WHJ_total = g.WHJ_box + g.WHJ_protol;
+        g.WHO_total = g.WHO_box + g.WHO_protol;
+        g.global_wh_box    = g.WHS_box    + g.WHB_box    + g.WHJ_box    + g.WHO_box;
+        g.global_wh_protol = g.WHS_protol + g.WHB_protol + g.WHJ_protol + g.WHO_protol;
+        g.global_wh_total  = g.global_wh_box + g.global_wh_protol;
+        g.global_all = g.global_wh_total + g.retail + g.consig;
+        g.sales3Avg = g.sales3N > 0 ? (g.sales3Sum / g.sales3N) : 0;
+        return g;
+    }
+    TIERS.forEach(function(t){ derive(byTier[t]); });
+    derive(total);
+
+    // Format helpers
+    function f(n) {
+        if (n == null || isNaN(n)) return '—';
+        if (n === 0) return '<span style="color:#94a3b8;">0</span>';
+        return Math.round(n).toLocaleString('id-ID');
+    }
+    function fBox(pairs) {
+        // pairs from "Box" warehouse → display as box count (pairs / 12)
+        if (!pairs) return '<span style="color:#94a3b8;">0</span>';
+        var box = pairs / 12;
+        // Show as integer if exact, else 1 decimal
+        return (Math.abs(box - Math.round(box)) < 0.05)
+            ? Math.round(box).toLocaleString('id-ID')
+            : box.toLocaleString('id-ID', {minimumFractionDigits:1, maximumFractionDigits:1});
+    }
+    function pct(part, whole) {
+        if (!whole || whole === 0) return '—';
+        var p = part / whole * 100;
+        if (p === 0) return '<span style="color:#94a3b8;">0%</span>';
+        return Math.round(p) + '%';
+    }
+
+    // Color theme per WH group
+    var COL_WHS = '#dbeafe', COL_WHB = '#dcfce7', COL_WHJ = '#fef3c7', COL_WHO = '#ede9fe';
+    var COL_GLOBAL_WH = '#e0f2fe', COL_GLOBAL_R = '#fce7f3', COL_GLOBAL_C = '#fef9c3', COL_GLOBAL_ALL = '#d1fae5';
+    var COL_SALES = '#fee2e2';
+    var thinBorder = '1px solid #e5e7eb';
+    var cellPad = '4px 6px';
+
+    // Build header (2 rows)
+    function whGroupHead(label, bg) {
+        return '<th colspan="4" style="background:' + bg + ';color:#0f172a;font-weight:700;text-align:center;padding:' + cellPad + ';border:' + thinBorder + ';">' + label + '</th>';
+    }
+    function pairHead(label, bg) {
+        return '<th colspan="2" style="background:' + bg + ';color:#0f172a;font-weight:700;text-align:center;padding:' + cellPad + ';border:' + thinBorder + ';">' + label + '</th>';
+    }
+    function subHead(label, bg) {
+        return '<th style="background:' + bg + ';color:#374151;font-size:10px;font-weight:600;text-align:center;padding:3px 5px;border:' + thinBorder + ';">' + label + '</th>';
+    }
+
+    var html = '<div class="card" style="overflow:auto;">';
+    html += '<div class="card-header" style="padding:8px 12px;background:#002A3A;color:#fff;">'
+         + '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">'
+         + '<div style="font-size:13px;font-weight:700;letter-spacing:0.3px;">Tier × WH Summary</div>'
+         + '<div style="font-size:10px;color:#94a3b8;">Mengikuti filter aktif · Box dalam jumlah box (@12 pair) · Protol & Total dalam pair</div>'
+         + '</div></div>';
+    html += '<div style="overflow:auto;max-width:100%;">';
+    html += '<table style="border-collapse:collapse;font-size:11px;font-variant-numeric:tabular-nums;width:100%;min-width:1700px;">';
+    // Row 1 (group headers)
+    html += '<thead>';
+    html += '<tr>'
+         + '<th rowspan="2" style="background:#0f172a;color:#fff;font-weight:700;text-align:center;padding:6px 8px;border:' + thinBorder + ';position:sticky;left:0;z-index:3;min-width:46px;">Tier</th>'
+         + whGroupHead('Stok WHS', COL_WHS)
+         + whGroupHead('Stok WHB', COL_WHB)
+         + whGroupHead('Stok WHJ', COL_WHJ)
+         + whGroupHead('Stok WH Online', COL_WHO)
+         + whGroupHead('Global Stok WH', COL_GLOBAL_WH)
+         + pairHead('Global Stok Retail', COL_GLOBAL_R)
+         + pairHead('Global Stok Consig', COL_GLOBAL_C)
+         + pairHead('Global All Stock', COL_GLOBAL_ALL)
+         + pairHead('Sales Bln Lalu', COL_SALES)
+         + pairHead('Sales AVG 3 Bln', COL_SALES)
+         + '</tr>';
+    // Row 2 (sub headers)
+    html += '<tr>';
+    [COL_WHS, COL_WHB, COL_WHJ, COL_WHO, COL_GLOBAL_WH].forEach(function(c){
+        html += subHead('Box', c) + subHead('Protol', c) + subHead('Total (pair)', c) + subHead('%', c);
+    });
+    [COL_GLOBAL_R, COL_GLOBAL_C, COL_GLOBAL_ALL, COL_SALES, COL_SALES].forEach(function(c){
+        html += subHead('Pairs', c) + subHead('%', c);
+    });
+    html += '</tr>';
+    html += '</thead><tbody>';
+
+    function rowHtml(label, g, isTotal) {
+        var base = isTotal ? 'background:#0f172a;color:#fff;font-weight:700;' : 'background:#fff;';
+        var labelCss = base + 'padding:' + cellPad + ';border:' + thinBorder + ';text-align:center;position:sticky;left:0;z-index:2;';
+        var numCss = 'padding:' + cellPad + ';border:' + thinBorder + ';text-align:right;';
+        if (isTotal) numCss = 'padding:' + cellPad + ';border:' + thinBorder + ';text-align:right;background:#0f172a;color:#fff;font-weight:700;';
+        var pctCss = numCss + (isTotal ? '' : 'color:#64748b;');
+
+        function cell(v) { return '<td style="' + numCss + '">' + v + '</td>'; }
+        function cellP(v) { return '<td style="' + pctCss + '">' + v + '</td>'; }
+
+        var s = '<tr>';
+        s += '<td style="' + labelCss + '">' + label + '</td>';
+        // WHS
+        s += cell(fBox(g.WHS_box)) + cell(f(g.WHS_protol)) + cell(f(g.WHS_total)) + cellP(pct(g.WHS_total, total.WHS_total));
+        // WHB
+        s += cell(fBox(g.WHB_box)) + cell(f(g.WHB_protol)) + cell(f(g.WHB_total)) + cellP(pct(g.WHB_total, total.WHB_total));
+        // WHJ
+        s += cell(fBox(g.WHJ_box)) + cell(f(g.WHJ_protol)) + cell(f(g.WHJ_total)) + cellP(pct(g.WHJ_total, total.WHJ_total));
+        // WHO
+        s += cell(fBox(g.WHO_box)) + cell(f(g.WHO_protol)) + cell(f(g.WHO_total)) + cellP(pct(g.WHO_total, total.WHO_total));
+        // Global WH
+        s += cell(fBox(g.global_wh_box)) + cell(f(g.global_wh_protol)) + cell(f(g.global_wh_total)) + cellP(pct(g.global_wh_total, total.global_wh_total));
+        // Global Retail
+        s += cell(f(g.retail)) + cellP(pct(g.retail, total.retail));
+        // Global Consig
+        s += cell(f(g.consig)) + cellP(pct(g.consig, total.consig));
+        // Global All
+        s += cell(f(g.global_all)) + cellP(pct(g.global_all, total.global_all));
+        // Sales Bln Lalu
+        s += cell(f(g.salesLast)) + cellP(pct(g.salesLast, total.salesLast));
+        // Sales AVG 3 Bln
+        s += cell(f(g.sales3Avg)) + cellP(pct(g.sales3Avg, total.sales3Avg));
+        s += '</tr>';
+        return s;
+    }
+
+    TIERS.forEach(function(t){
+        html += rowHtml('T' + t, byTier[t], false);
+    });
+    html += rowHtml('Total', total, true);
+    html += '</tbody></table></div></div>';
+    host.innerHTML = html;
+}
+
 function scRender() {
     // Stock Control unified — IGNORE gf.channel (channel filter doesn't apply to Stock Control).
     // Always aggregate from all sources (warehouse + retail + consig + online warehouses).
@@ -5590,7 +5771,7 @@ function scRender() {
     // ga invalidate cache → skip 400K+ iterations saat user filter ringan.
     var _snapKey = (allData['_meta'] || {}).snapshot_date || '';
     var _consigSnap = (typeof consignmentStockData !== 'undefined' && consignmentStockData && consignmentStockData._meta) ? (consignmentStockData._meta.snapshot_date || '') : '';
-    var _scAggKey = scViewMode + '|' + (gf.area || '_all') + '|' + _snapKey + '|' + _consigSnap;
+    var _scAggKey = scViewMode + '|' + (gf.area || '_all') + '|' + _snapKey + '|' + _consigSnap + '|tsv2';
     var rows;
     if (window._scAggCache && window._scAggCache.key === _scAggKey && window._scAggCache.rows) {
         rows = window._scAggCache.rows;
@@ -5618,6 +5799,12 @@ function scRender() {
                 version: (typeof _normalizeVersion === 'function') ? _normalizeVersion(it.version) : (it.version || ''),
                 WHS: 0, WHB: 0, WHJ: 0,
                 WHOB: 0, WHOJ: 0,
+                // Box/Protol split per WH bucket (pairs). Box pairs are always multiples of 12
+                // (full dozens stored di gudang utama); Protol pairs are loose (from gudang Protol).
+                WHS_box: 0, WHS_protol: 0,
+                WHB_box: 0, WHB_protol: 0,
+                WHJ_box: 0, WHJ_protol: 0,
+                WHO_box: 0, WHO_protol: 0,   // online (Bali + Jakarta merged)
                 stokRetail: 0, stokConsig: 0,
                 _kkSet: {}                // collects kode_kecil children for sales aggregation
             };
@@ -5670,6 +5857,12 @@ function scRender() {
                 if (scAreaFilter && scAreaWHcodes.indexOf(c) === -1) return;
                 var qty = Number(it.store_stock[wh]) || 0;
                 row[c] += qty;
+                // Box/Protol split — gudang yang ada "protol" di namanya = Protol bucket
+                var isProtol = String(wh).toLowerCase().indexOf('protol') !== -1;
+                // WHOB + WHOJ collapsed into single WHO_box/WHO_protol for "WH Online" column
+                var grp = (c === 'WHOB' || c === 'WHOJ') ? 'WHO' : c;
+                var fld = grp + (isProtol ? '_protol' : '_box');
+                row[fld] = (row[fld] || 0) + qty;
             });
         });
     });
@@ -5785,6 +5978,9 @@ function scRender() {
         return true;
     });
     scFiltered = rows;
+
+    // Tier × WH summary table (uses filtered rows)
+    try { _scRenderTierSummary(rows); } catch (e) { console.warn('tier summary render failed:', e); }
 
     // Summary cards (4 compact, follow filter): Stok WH / Stok Toko / Stok Consi / Stok Global
     // Computed from scFiltered (post-filter rows) so cards reflect active filters
