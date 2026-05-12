@@ -6320,11 +6320,11 @@ function scRender() {
 function anaRender() {
     var canvas = document.getElementById('anaChart');
     if (!canvas) return;
-    // Ensure scFiltered populated (scRender → filter aktif applied di sana)
-    if (!scFiltered || !scFiltered.length) {
-        if (typeof scRender === 'function') {
-            try { scRender(); } catch (e) { console.warn('anaRender: scRender failed', e); }
-        }
+    // SELALU re-run scRender supaya scFiltered fresh sesuai filter terbaru.
+    // scRender render ke DOM Stock Control (hidden saat di tab Performa) tapi
+    // tetap update global scFiltered yang kita butuhkan di sini.
+    if (typeof scRender === 'function') {
+        try { scRender(); } catch (e) { console.warn('anaRender: scRender failed', e); }
     }
     // Aggregate per article (dedupe handles SKU mode where rows are per-size)
     var perKode = {};
