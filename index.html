@@ -1123,6 +1123,7 @@ html, body {
     <button class="tab-btn active" data-tab="stockcontrol">Stock Control</button>
     <button class="tab-btn" data-tab="maxstock">Max Stock</button>
     <button class="tab-btn" data-tab="skusearch" style="display:none;">SKU Search</button>
+    <button class="tab-btn" data-tab="chart">Chart</button>
     <button class="tab-btn" data-tab="summaryreport">Summary Report</button>
   </nav>
 
@@ -1429,6 +1430,44 @@ html, body {
     </div>
   </div>
 </section>
+<section class="tab-content" data-tab="chart">
+  <div class="card" style="margin-bottom:12px;">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;">
+      <div>
+        <div class="card-title">Stock Now vs Sales 3 Bulan — Per Article</div>
+        <div class="card-meta" id="anaCountInfo" style="font-size:11px;color:var(--fg-soft);">—</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <label style="font-size:11px;color:var(--fg-soft);">Urut:</label>
+        <select id="anaSortBy" class="filter-select" onchange="anaRender()" style="min-width:160px;">
+          <option value="sales3">Sales 3 Bulan (DESC)</option>
+          <option value="stock">Stock Now (DESC)</option>
+          <option value="ratio_high">Stock/Sales Ratio (oversupply dulu)</option>
+          <option value="ratio_low">Sales/Stock Ratio (laris dulu)</option>
+        </select>
+        <label style="font-size:11px;color:var(--fg-soft);">Top:</label>
+        <select id="anaTopN" class="filter-select" onchange="anaRender()" style="min-width:80px;">
+          <option value="20">Top 20</option>
+          <option value="50" selected>Top 50</option>
+          <option value="100">Top 100</option>
+          <option value="200">Top 200</option>
+          <option value="9999">Semua</option>
+        </select>
+      </div>
+    </div>
+    <div style="padding:8px 14px;font-size:11px;color:var(--fg-soft);border-top:1px solid var(--border-soft);">
+      Mengikuti filter aktif (area / gender / series / tier / version / search). Stock Now = WH + Retail + Consig. Sales 3 Bulan = sum of last 3 months (semua channel).
+    </div>
+  </div>
+
+  <!-- Chart area — height responsive to top N -->
+  <div class="card" style="padding:14px;">
+    <div id="anaChartWrap" style="position:relative;height:600px;">
+      <canvas id="anaChart"></canvas>
+    </div>
+  </div>
+</section>
+
 <section class="tab-content" data-tab="summaryreport">
 
   <!-- STOK PER WH MULTI-SHEET -->
@@ -1526,11 +1565,11 @@ function switchHubTab(tab) {
     document.querySelectorAll('.tab-btn[data-tab]').forEach(function(b){ b.classList.toggle('active', b.dataset.tab === tab); });
     document.querySelectorAll('.tab-content').forEach(function(s){ s.classList.toggle('active', s.dataset.tab === tab); });
     if (history.replaceState) history.replaceState(null, '', '#' + tab);
-    // Hide Channel + Toko/WH filters on Stock Control tab — Stock Control filters: area/gender/series/tier/version/search
+    // Hide Channel + Toko/WH filters on Stock Control + Chart tabs — those tabs filter via area/gender/series/tier/version/search only
     var fgChannel = document.getElementById('fgChannel');
-    if (fgChannel) fgChannel.style.display = (tab === 'stockcontrol') ? 'none' : '';
+    if (fgChannel) fgChannel.style.display = (tab === 'stockcontrol' || tab === 'chart') ? 'none' : '';
     var fgStore = document.getElementById('fgStore');
-    if (fgStore) fgStore.style.display = (tab === 'stockcontrol') ? 'none' : '';
+    if (fgStore) fgStore.style.display = (tab === 'stockcontrol' || tab === 'chart') ? 'none' : '';
     // Trigger tab-specific init once data loaded
     if (!_tabsInitialized[tab] && _dataLoaded) {
         _tabsInitialized[tab] = true;
@@ -1555,6 +1594,7 @@ function switchHubTab(tab) {
             }
             else if (tab === 'skusearch') { /* no init needed — waits for user input */ }
             else if (tab === 'summaryreport') { /* no init needed — just export buttons */ }
+            else if (tab === 'chart') { if (typeof anaRender === 'function') anaRender(); }
         } catch(e) { console.error('tab init:', tab, e); }
     }
 }
@@ -6291,6 +6331,169 @@ function scRender() {
     }
 }
 
+// ============================================================
+// CHART TAB — Stock Now vs Sales 3 Bulan per Article
+// Pakai scFiltered (yang sudah respect global filter). Dedupe per kode (handles SKU mode).
+// Render Chart.js horizontal grouped bar chart.
+// ============================================================
+function anaRender() {
+    var canvas = document.getElementById('anaChart');
+    if (!canvas) return;
+    // Ensure scFiltered is populated — call scRender if needed
+    if (!scFiltered || !scFiltered.length) {
+        if (typeof scRender === 'function') {
+            try { scRender(); } catch (e) { console.warn('anaRender: scRender failed', e); }
+        }
+    }
+    // Aggregate per article (dedupe handles SKU mode where rows are per-size)
+    var perKode = {};
+    (scFiltered || []).forEach(function(r){
+        if (!r.kode) return;
+        if (!perKode[r.kode]) {
+            perKode[r.kode] = {
+                kode: r.kode,
+                name: r.name || '',
+                tier: r.tier || '',
+                gender: r.gender || '',
+                series: r.series || '',
+                stock: 0,
+                sales3: 0
+            };
+        }
+        var p = perKode[r.kode];
+        p.stock += r.globalStock || 0;
+        var ms = r.monthlySales || [];
+        var start = Math.max(0, ms.length - 3);
+        for (var i = start; i < ms.length; i++) p.sales3 += ms[i] || 0;
+    });
+    var items = Object.values(perKode);
+
+    // Sort
+    var sortBy = (document.getElementById('anaSortBy') || {}).value || 'sales3';
+    if (sortBy === 'stock') {
+        items.sort(function(a,b){ return b.stock - a.stock; });
+    } else if (sortBy === 'ratio_high') {
+        // Stock/Sales ratio: tinggi = oversupply. Article tanpa sales = priority tinggi
+        items.sort(function(a,b){
+            var ra = a.sales3 > 0 ? a.stock / a.sales3 : (a.stock > 0 ? 9999 : 0);
+            var rb = b.sales3 > 0 ? b.stock / b.sales3 : (b.stock > 0 ? 9999 : 0);
+            return rb - ra;
+        });
+    } else if (sortBy === 'ratio_low') {
+        // Sales/Stock ratio: tinggi = laris. Article tanpa stock kalau ada sales = priority tinggi
+        items.sort(function(a,b){
+            var ra = a.stock > 0 ? a.sales3 / a.stock : (a.sales3 > 0 ? 9999 : 0);
+            var rb = b.stock > 0 ? b.sales3 / b.stock : (b.sales3 > 0 ? 9999 : 0);
+            return rb - ra;
+        });
+    } else {
+        // Default: sales3 DESC
+        items.sort(function(a,b){ return b.sales3 - a.sales3; });
+    }
+
+    // Top N
+    var topN = parseInt((document.getElementById('anaTopN') || {}).value, 10) || 50;
+    var totalCount = items.length;
+    items = items.slice(0, topN);
+
+    // Update info text
+    var info = document.getElementById('anaCountInfo');
+    if (info) {
+        var totalStock = items.reduce(function(s,x){ return s + x.stock; }, 0);
+        var totalSales = items.reduce(function(s,x){ return s + x.sales3; }, 0);
+        info.textContent = 'Tampil ' + items.length.toLocaleString('id-ID') + ' / ' + totalCount.toLocaleString('id-ID') + ' article · stock ' + Math.round(totalStock).toLocaleString('id-ID') + ' pair · sales ' + Math.round(totalSales).toLocaleString('id-ID') + ' pair';
+    }
+
+    // Adjust canvas height — dynamic based on # items (28px per bar group)
+    var wrap = document.getElementById('anaChartWrap');
+    if (wrap) {
+        wrap.style.height = Math.max(400, items.length * 28 + 80) + 'px';
+    }
+
+    // Build chart data
+    var labels = items.map(function(x){
+        var n = (x.name || '').substring(0, 32);
+        return x.kode + (n ? ' — ' + n : '');
+    });
+    var stockData = items.map(function(x){ return Math.round(x.stock); });
+    var salesData = items.map(function(x){ return Math.round(x.sales3); });
+
+    // Destroy existing chart
+    if (window._anaChartInstance) {
+        try { window._anaChartInstance.destroy(); } catch(e) {}
+        window._anaChartInstance = null;
+    }
+    if (typeof Chart === 'undefined') {
+        console.warn('Chart.js not loaded');
+        return;
+    }
+
+    window._anaChartInstance = new Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Stock Now (pair)',
+                    data: stockData,
+                    backgroundColor: 'rgba(0, 42, 58, 0.85)',  // navy
+                    borderColor: 'rgba(0, 42, 58, 1)',
+                    borderWidth: 0,
+                    barPercentage: 0.85,
+                    categoryPercentage: 0.85
+                },
+                {
+                    label: 'Sales 3 Bulan (pair)',
+                    data: salesData,
+                    backgroundColor: 'rgba(0, 226, 115, 0.85)',  // green
+                    borderColor: 'rgba(0, 196, 99, 1)',
+                    borderWidth: 0,
+                    barPercentage: 0.85,
+                    categoryPercentage: 0.85
+                }
+            ]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { font: { size: 12 }, color: '#0f172a' }
+                },
+                tooltip: {
+                    callbacks: {
+                        afterBody: function(ctx) {
+                            if (!ctx || !ctx.length) return '';
+                            var idx = ctx[0].dataIndex;
+                            var it = items[idx];
+                            if (!it) return '';
+                            var ratio = it.sales3 > 0 ? (it.stock / it.sales3).toFixed(2) : '∞';
+                            return [
+                                'Tier: ' + (it.tier || '-') + ' · Gender: ' + (it.gender || '-'),
+                                'Series: ' + (it.series || '-'),
+                                'Stock / Sales ratio: ' + ratio + (it.sales3 === 0 ? ' (no sales)' : '')
+                            ];
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    ticks: { color: '#0f172a', callback: function(v){ return v.toLocaleString('id-ID'); } },
+                    grid: { color: 'rgba(0,0,0,0.05)' }
+                },
+                y: {
+                    ticks: { color: '#0f172a', font: { size: 10 }, autoSkip: false },
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+}
+
 async function scExportExcel() {
     if (!scFiltered || !scFiltered.length) { alert('Tidak ada data untuk export'); return; }
     try { await window.ensureXlsx(); } catch(e) { alert('Gagal load library XLSX'); return; }
@@ -7152,6 +7355,7 @@ function gfDispatchToActiveTab() {
                     break;
                 case 'stockbyarea':    if (typeof renderStockByArea === 'function') renderStockByArea(); break;
                 case 'maxstock':       if (typeof updateMaxStockAnalysis === 'function') updateMaxStockAnalysis(); break;
+                case 'chart':          if (typeof anaRender === 'function') anaRender(); break;
                 case 'skusearch':      if (gf.search && typeof runSearch === 'function') { var inp = document.getElementById('skuInput'); if (inp) inp.value = gf.search; runSearch(); } break;
                 default: break;
             }
