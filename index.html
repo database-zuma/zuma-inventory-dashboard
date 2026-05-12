@@ -4961,7 +4961,7 @@ function invExportContextual() {
     else document.addEventListener('DOMContentLoaded', populate);
 })();
 
-async function exportSalesAudit(btnEl) {
+function exportSalesAudit(btnEl) {
     var btn   = btnEl || document.getElementById('invSalesAuditBtn');
     var label = document.getElementById('invSalesAuditBtnLabel');
     var fromEl = document.getElementById('auditFromMonth');
@@ -4971,61 +4971,31 @@ async function exportSalesAudit(btnEl) {
     if (!fromV || !toV) { alert('Pilih bulan Dari & Sampai dulu.'); return; }
     if (fromV > toV) { alert('Bulan "Dari" tidak boleh lebih besar dari "Sampai".'); return; }
     var period = (fromV === toV) ? fromV : (fromV + ':' + toV);
+    var url = API_BASE + '/api/export/sales-audit?period=' + encodeURIComponent(period) + '&api_key=' + encodeURIComponent(API_KEY);
     var origText = label ? label.textContent : '';
     if (btn) btn.disabled = true;
-    if (label) label.textContent = 'Menyiapkan… (klik pertama ~30-90s, klik berikutnya <2s)';
-    try {
-        var url = API_BASE + '/api/export/sales-audit?period=' + encodeURIComponent(period);
-        var res = await fetch(url, { headers: { 'X-API-Key': API_KEY } });
-        if (!res.ok) {
-            var detail = '';
-            try { detail = (await res.json()).detail || ''; } catch(e) {}
-            throw new Error('HTTP ' + res.status + ' ' + detail);
-        }
-        var blob = await res.blob();
-        var today = new Date().toISOString().slice(0,10);
-        var fnameSafe = period.replace(':', '-to-');
-        var a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'Sales_Audit_' + fnameSafe + '_' + today + '.xlsx';
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
-    } catch (err) {
-        alert('Gagal export Sales Audit: ' + (err && err.message ? err.message : err));
-    } finally {
+    if (label) label.textContent = 'Membuka download…';
+    // Direct navigation = browser native download (progress bar instan, no JS buffering)
+    window.location.href = url;
+    setTimeout(function(){
         if (btn) btn.disabled = false;
         if (label) label.textContent = origText || 'Download Sales Audit (xlsx)';
-    }
+    }, 2000);
 }
 
 // === Stok per WH multi-sheet xlsx (server-rendered, fresh dari DB) ===
-async function exportStokPerWH(btnEl) {
+function exportStokPerWH(btnEl) {
     var btn   = btnEl || document.getElementById('invStokWHBtn');
     var label = document.getElementById('invStokWHBtnLabel');
     var origText = label ? label.textContent : '';
+    var url = API_BASE + '/api/export/stok-per-wh?api_key=' + encodeURIComponent(API_KEY);
     if (btn) btn.disabled = true;
-    if (label) label.textContent = 'Menyiapkan… (klik pertama ~15-20s, klik berikutnya <1s)';
-    try {
-        var url = API_BASE + '/api/export/stok-per-wh';
-        var res = await fetch(url, { headers: { 'X-API-Key': API_KEY } });
-        if (!res.ok) {
-            var detail = '';
-            try { detail = (await res.json()).detail || ''; } catch(e) {}
-            throw new Error('HTTP ' + res.status + ' ' + detail);
-        }
-        var blob = await res.blob();
-        var today = new Date().toISOString().slice(0,10);
-        var a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'Stok_per_WH_' + today + '.xlsx';
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
-    } catch (err) {
-        alert('Gagal export Stok per WH: ' + (err && err.message ? err.message : err));
-    } finally {
+    if (label) label.textContent = 'Membuka download…';
+    window.location.href = url;
+    setTimeout(function(){
         if (btn) btn.disabled = false;
         if (label) label.textContent = origText || 'Stok per WH (xlsx)';
-    }
+    }, 2000);
 }
 
 // === Stock Control: kode-level breakdown modal (per gudang × entity) ===
