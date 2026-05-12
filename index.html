@@ -8,7 +8,6 @@
 <meta http-equiv="Expires" content="0">
 <title>Zuma Inventory Analytics</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <!-- xlsx-js-style loaded on-demand by ensureXlsx() — saves ~425 KB on first paint -->
 <script>
   window._xlsxLoadingPromise = null;
@@ -6411,14 +6410,10 @@ function anaRender() {
         wrap.style.height = Math.max(400, items.length * 28 + 80) + 'px';
     }
 
-    // Build chart data — labels = multi-line (kode+name | ratio) per article
+    // Build chart data
     var labels = items.map(function(x){
-        var n = (x.name || '').substring(0, 30);
-        var ratio = x.sales3 > 0 ? (x.stock / x.sales3).toFixed(2) : (x.stock > 0 ? '∞' : '0');
-        return [
-            x.kode + (n ? ' · ' + n : ''),
-            'ratio ' + ratio
-        ];
+        var n = (x.name || '').substring(0, 32);
+        return x.kode + (n ? ' — ' + n : '');
     });
     var stockData = items.map(function(x){ return Math.round(x.stock); });
     var salesData = items.map(function(x){ return Math.round(x.sales3); });
@@ -6432,10 +6427,6 @@ function anaRender() {
         console.warn('Chart.js not loaded');
         return;
     }
-    // Auto-register datalabels plugin (kalau ada)
-    if (typeof ChartDataLabels !== 'undefined' && !window._anaDLRegistered) {
-        try { Chart.register(ChartDataLabels); window._anaDLRegistered = true; } catch(e) {}
-    }
 
     window._anaChartInstance = new Chart(canvas.getContext('2d'), {
         type: 'bar',
@@ -6448,7 +6439,7 @@ function anaRender() {
                     backgroundColor: 'rgba(0, 42, 58, 0.85)',  // navy
                     borderColor: 'rgba(0, 42, 58, 1)',
                     borderWidth: 0,
-                    barPercentage: 0.9,
+                    barPercentage: 0.85,
                     categoryPercentage: 0.85
                 },
                 {
@@ -6457,7 +6448,7 @@ function anaRender() {
                     backgroundColor: 'rgba(0, 226, 115, 0.85)',  // green
                     borderColor: 'rgba(0, 196, 99, 1)',
                     borderWidth: 0,
-                    barPercentage: 0.9,
+                    barPercentage: 0.85,
                     categoryPercentage: 0.85
                 }
             ]
@@ -6466,26 +6457,10 @@ function anaRender() {
             indexAxis: 'y',
             responsive: true,
             maintainAspectRatio: false,
-            layout: { padding: { right: 60 } },  // ruang buat label angka di ujung bar
             plugins: {
                 legend: {
                     position: 'top',
-                    labels: { font: { size: 12, weight: 600 }, color: '#0f172a' }
-                },
-                datalabels: {
-                    anchor: 'end',
-                    align: 'right',
-                    clip: false,
-                    formatter: function(v) {
-                        if (v == null || v === 0) return '';
-                        return Math.round(v).toLocaleString('id-ID');
-                    },
-                    font: { size: 10, weight: 600 },
-                    color: function(ctx) {
-                        // Warna text label = warna bar (navy untuk Stock, hijau dark untuk Sales)
-                        return ctx.datasetIndex === 0 ? '#002A3A' : '#00834e';
-                    },
-                    padding: { left: 4 }
+                    labels: { font: { size: 12 }, color: '#0f172a' }
                 },
                 tooltip: {
                     callbacks: {
@@ -6511,16 +6486,7 @@ function anaRender() {
                     grid: { color: 'rgba(0,0,0,0.05)' }
                 },
                 y: {
-                    ticks: {
-                        color: '#0f172a',
-                        font: { size: 10 },
-                        autoSkip: false,
-                        // Render line 1 (kode + name) bigger/bold, line 2 (ratio) muted
-                        callback: function(value, index) {
-                            // value = array dari label (kalau labels[i] adalah array)
-                            return labels[index];
-                        }
-                    },
+                    ticks: { color: '#0f172a', font: { size: 10 }, autoSkip: false },
                     grid: { display: false }
                 }
             }
