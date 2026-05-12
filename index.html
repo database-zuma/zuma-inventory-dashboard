@@ -1436,7 +1436,6 @@ html, body {
     <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;">
       <div>
         <div class="card-title">Performa Article — Stock Now vs Sales 3 Bulan</div>
-        <div class="card-meta" id="anaCountInfo" style="font-size:11px;color:var(--fg-soft);">—</div>
       </div>
     </div>
   </div>
@@ -6360,15 +6359,6 @@ function anaRender() {
     );
     var totalCount = items.length;
     if (!gfActive) items = items.slice(0, 20);
-
-    // Update info text
-    var info = document.getElementById('anaCountInfo');
-    if (info) {
-        var totalStock = items.reduce(function(s,x){ return s + x.stock; }, 0);
-        var totalSales = items.reduce(function(s,x){ return s + x.sales3; }, 0);
-        var modeLabel = gfActive ? 'Filter aktif' : 'Top 20 (Sales DESC)';
-        info.textContent = modeLabel + ' · Tampil ' + items.length.toLocaleString('id-ID') + ' / ' + totalCount.toLocaleString('id-ID') + ' article · stock ' + Math.round(totalStock).toLocaleString('id-ID') + ' pair · sales ' + Math.round(totalSales).toLocaleString('id-ID') + ' pair';
-    }
 
     // Dynamic height — 32px per bar group (lebih lega buat label angka)
     var wrap = document.getElementById('anaChartWrap');
