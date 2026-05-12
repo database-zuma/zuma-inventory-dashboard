@@ -6005,7 +6005,11 @@ function scRender() {
     window._scAggCache = { key: _scAggKey, rows: rows };
     } // end aggregation cache miss branch
     rows = rows.filter(function(r){
-        if (hideZero && r.globalStock === 0) return false;
+        // Filter "Sembunyikan total=0" — pakai "semua kolom stock = 0" biar konsisten antara SKU/Kode mode.
+        // Kalau pakai globalStock=0 saja, row dengan WH negatif (data Accurate) yang netting out ke 0
+        // bakal di-filter di SKU mode tapi tetep ada di Kode mode → totals jadi beda.
+        if (hideZero && r.WHS === 0 && r.WHB === 0 && r.WHJ === 0 && r.WHOB === 0 && r.WHOJ === 0
+                     && r.stokRetail === 0 && r.stokConsig === 0) return false;
         if (tier && r.tier !== tier) return false;
         if (gender && r.gender !== gender) return false;
         if (!_gfMatch(r.series, gf.series)) return false;
