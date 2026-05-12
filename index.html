@@ -6445,8 +6445,7 @@ function anaRender() {
                     borderColor: 'rgba(0, 42, 58, 1)',
                     borderWidth: 0,
                     barPercentage: 0.9,
-                    categoryPercentage: 0.85,
-                    minBarLength: 3
+                    categoryPercentage: 0.85
                 },
                 {
                     label: 'Sales 3 Bulan (pair)',
@@ -6455,8 +6454,7 @@ function anaRender() {
                     borderColor: 'rgba(0, 196, 99, 1)',
                     borderWidth: 0,
                     barPercentage: 0.9,
-                    categoryPercentage: 0.85,
-                    minBarLength: 3
+                    categoryPercentage: 0.85
                 }
             ]
         },
@@ -6505,13 +6503,20 @@ function anaRender() {
             scales: {
                 x: {
                     beginAtZero: true,
-                    stacked: false,
                     ticks: { color: '#0f172a', callback: function(v){ return v.toLocaleString('id-ID'); } },
                     grid: { color: 'rgba(0,0,0,0.05)' }
                 },
                 y: {
-                    stacked: false,
-                    ticks: { color: '#0f172a', font: { size: 10 }, autoSkip: false },
+                    ticks: {
+                        color: '#0f172a',
+                        font: { size: 10 },
+                        autoSkip: false,
+                        // Render line 1 (kode + name) bigger/bold, line 2 (ratio) muted
+                        callback: function(value, index) {
+                            // value = array dari label (kalau labels[i] adalah array)
+                            return labels[index];
+                        }
+                    },
                     grid: { display: false }
                 }
             }
