@@ -5884,11 +5884,41 @@ function scRender() {
     // ga invalidate cache → skip 400K+ iterations saat user filter ringan.
     var _snapKey = (allData['_meta'] || {}).snapshot_date || '';
     var _consigSnap = (typeof consignmentStockData !== 'undefined' && consignmentStockData && consignmentStockData._meta) ? (consignmentStockData._meta.snapshot_date || '') : '';
-    var _scAggKey = scViewMode + '|' + (gf.area || '_all') + '|' + _snapKey + '|' + _consigSnap;
+    var _scAggKey = scViewMode + '|' + (gf.area || '_all') + '|' + _snapKey + '|' + _consigSnap + '|canontier';
     var rows;
     if (window._scAggCache && window._scAggCache.key === _scAggKey && window._scAggCache.rows) {
         rows = window._scAggCache.rows;
     } else {
+    // ============ CANONICAL TIER PER ARTICLE ============
+    // Raw data dari Accurate kadang punya tier inconsistent across sizes untuk article yang sama
+    // (10% articles, contoh: E2A03 punya tier 5, 1, dan 2 di size berbeda). Tanpa fix ini, SKU vs
+    // Kode mode kasih hasil filter berbeda → summary & metric cards divergent. Solusi: voting
+    // mayoritas — pakai tier yang muncul paling banyak per article (tie → tier lebih kecil).
+    var _scCanonicalTier = {};
+    (function(){
+        var votes = {};
+        ['DDD','LJBB','MBB','UBB'].forEach(function(ent){
+            var ed = (allData || {})[ent] || {};
+            (ed.warehouse || []).forEach(function(it){
+                var kode = String(it.kode || '').toUpperCase();
+                if (!kode) return;
+                var tier = it.tier != null ? String(it.tier) : '';
+                if (tier === '') return;
+                votes[kode] = votes[kode] || {};
+                votes[kode][tier] = (votes[kode][tier] || 0) + 1;
+            });
+        });
+        Object.keys(votes).forEach(function(kode){
+            var v = votes[kode];
+            var best = '', bestCount = -1;
+            // Sort tier keys ascending → tie-breaker picks lower tier
+            Object.keys(v).sort().forEach(function(t){
+                if (v[t] > bestCount) { best = t; bestCount = v[t]; }
+            });
+            _scCanonicalTier[kode] = best;
+        });
+    })();
+
     // Aggregation key — SKU mode: per-size (kode_kecil "b1on02z34"), KodeKecil mode: article (kode "b1on02")
     var byKK = {};
     function ensureRow(it) {
@@ -5899,13 +5929,15 @@ function scRender() {
         var key   = scViewMode === 'sku' ? kk : kode;
         if (!key) return null;
         if (!byKK[key]) {
+            // Canonical tier — pakai voting per-article biar konsisten antara SKU vs Kode mode
+            var canonTier = _scCanonicalTier[kode];
             byKK[key] = {
                 sku: sku,
                 kode_kecil: kk,           // per-size short code
                 kode: kode,               // article (no size)
                 size: scViewMode === 'sku' ? (it.size || '') : '',
                 name: it.name || '',
-                tier: it.tier != null ? String(it.tier) : '',
+                tier: canonTier != null ? canonTier : (it.tier != null ? String(it.tier) : ''),
                 gender: it.gender || '',
                 series: it.series || '',
                 tipe: it.tipe || '',
