@@ -3811,16 +3811,13 @@ function gfSelectSuggestion(kode) {
     if (input) input.value = kode;
     gf.search = kode;
     gfHideAutocomplete();
-    // Jump to SKU Search tab and run the detailed search
-    gfRunSearch();
+    // Filter di tab aktif aja (tidak jump ke tab SKU Search dengan detail panel)
+    gfDispatchToActiveTab();
 }
 
 function gfRunSearch() {
-    // Switch to skusearch tab + populate its input + run its full-detail search
-    if (typeof switchHubTab === 'function') switchHubTab('skusearch');
-    var skuInp = document.getElementById('skuInput');
-    if (skuInp) skuInp.value = gf.search || '';
-    if (typeof runSearch === 'function') runSearch();
+    // Filter di tab aktif (search box sudah update gf.search via gfOnSearchInput)
+    gfDispatchToActiveTab();
 }
 
 // === SEARCH ===
