@@ -5563,15 +5563,107 @@ function scPopulateFilters() {
 
 // ============================================================
 // Tier × WH summary table (Stock Control)
-// Aggregates filtered rows per tier (T1, T2, T3, T4, T5, T8, Total)
-// Columns: per-WH (Box, Protol, Total Pair, %) + Global WH/Retail/Consig/All + Sales BLN Lalu / AVG 3 Month
-// Reads pre-computed fields: WHS_box/WHS_protol, WHB_box/WHB_protol, WHJ_box/WHJ_protol, WHO_box/WHO_protol,
-//                            stokRetail, stokConsig, monthlySales
+// Self-contained: re-aggregates raw allData per (article × WH bucket × size)
+// to compute Box vs Protol via min-across-sizes logic. Doesn't depend on
+// fields set by scRender — only reads `rows` for filter scope + retail/consig/sales.
+//
+// Box/Protol rule per article × WH bucket:
+//   - Stock di gudang yang namanya mengandung 'protol' → langsung Protol bucket
+//   - Stock di gudang Box-named (non-Protol) → split via min-across-sizes:
+//       N = jumlah size dalam assortment article (union semua WH yang punya stock)
+//       MIN = min(qty) antar size-size assortment (size yang gak ada di WH = 0)
+//       box_pairs = MIN × N (pair yang form complete sets)
+//       remainder = total - box_pairs (sisanya pindah ke Protol bucket)
 // ============================================================
 function _scRenderTierSummary(rows) {
     var host = document.getElementById('scTierSummary');
     if (!host) return;
     var TIERS = ['1','2','3','4','5','8'];
+
+    // Build filtered-article set (from rows, which already has all filters applied)
+    var articleSet = {};
+    rows.forEach(function(r){ articleSet[r.kode] = true; });
+
+    // Replicate classifyWhArea + area-filter logic from scRender (kept local to avoid touching scRender)
+    function classifyWhArea_(wh) {
+        var wl = String(wh || '').toLowerCase();
+        if (wl.indexOf('online') !== -1 && wl.indexOf('bali') !== -1) return 'WHOB';
+        if (wl.indexOf('online') !== -1 && (wl.indexOf('jakarta') !== -1 || wl.indexOf('jkt') !== -1)) return 'WHOJ';
+        if (wl.indexOf('bali') !== -1 || wl.indexOf('gatsu') !== -1) return 'WHB';
+        if (wl.indexOf('jakarta') !== -1 || wl.indexOf('pluit') !== -1) return 'WHJ';
+        if (wl.indexOf('pusat') !== -1 || wl.indexOf('surabaya') !== -1) return 'WHS';
+        return null;
+    }
+    var areaFilter = (typeof gf !== 'undefined' && gf.area) ? gf.area : '';
+    function areaWhCodes_(a) {
+        if (a === 'Bali') return ['WHB','WHOB'];
+        if (a === 'Jakarta') return ['WHJ','WHOJ'];
+        if (a === 'Jatim' || a === 'Jawa Timur') return ['WHS'];
+        return [];
+    }
+    var allowedWhs = areaWhCodes_(areaFilter);
+
+    // Pass 1: re-aggregate raw WH data into sizeMap (Box-named) + protolMap (Protol-named)
+    //   sizeMap[kode][grp][size] = qty
+    //   protolMap[kode][grp] = qty
+    var sizeMap = {};
+    var protolMap = {};
+    var stockData = (typeof allData !== 'undefined' && allData) ? allData : {};
+    ['DDD','LJBB','MBB','UBB'].forEach(function(ent){
+        var ed = stockData[ent] || {};
+        (ed.warehouse || []).forEach(function(it){
+            var kode = String(it.kode || '').toUpperCase();
+            if (!kode || !articleSet[kode]) return;
+            if (!it.store_stock) return;
+            var size = String(it.size || '');
+            Object.keys(it.store_stock).forEach(function(wh){
+                var c = classifyWhArea_(wh);
+                if (!c) return;
+                if (areaFilter && allowedWhs.indexOf(c) === -1) return;
+                var qty = Number(it.store_stock[wh]) || 0;
+                if (!qty) return;
+                var isProtol = String(wh).toLowerCase().indexOf('protol') !== -1;
+                var grp = (c === 'WHOB' || c === 'WHOJ') ? 'WHO' : c;
+                if (isProtol) {
+                    if (!protolMap[kode]) protolMap[kode] = {};
+                    protolMap[kode][grp] = (protolMap[kode][grp] || 0) + qty;
+                } else {
+                    if (!sizeMap[kode]) sizeMap[kode] = {};
+                    if (!sizeMap[kode][grp]) sizeMap[kode][grp] = {};
+                    sizeMap[kode][grp][size] = (sizeMap[kode][grp][size] || 0) + qty;
+                }
+            });
+        });
+    });
+
+    // Pass 2: compute box vs protol per article × WH bucket using min-across-assortment logic
+    //   abp[kode][grp] = { boxPairs, protolPairs }
+    var abp = {};
+    Object.keys(sizeMap).forEach(function(kode){
+        // Assortment = union of sizes across all WH buckets for this article
+        var asSet = {};
+        Object.keys(sizeMap[kode]).forEach(function(grp){
+            Object.keys(sizeMap[kode][grp]).forEach(function(s){ asSet[s] = true; });
+        });
+        var sizes = Object.keys(asSet);
+        var N = sizes.length;
+        abp[kode] = {};
+        Object.keys(sizeMap[kode]).forEach(function(grp){
+            var sm = sizeMap[kode][grp];
+            var totalQty = 0, minQty = (N > 0 ? Infinity : 0);
+            for (var i = 0; i < N; i++) {
+                var q = sm[sizes[i]] || 0;
+                totalQty += q;
+                if (q < minQty) minQty = q;
+            }
+            if (minQty === Infinity) minQty = 0;
+            var boxPairs = minQty * N;
+            var protolRem = totalQty - boxPairs;
+            abp[kode][grp] = { boxPairs: boxPairs, protolPairs: protolRem };
+        });
+    });
+
+    // Pass 3: aggregate per tier from rows (using abp + protolMap for box/protol; rows for retail/consig/sales)
     function blank() {
         return {
             WHS_box:0, WHS_protol:0, WHB_box:0, WHB_protol:0,
@@ -5585,22 +5677,20 @@ function _scRenderTierSummary(rows) {
     TIERS.forEach(function(t){ byTier[t] = blank(); });
     rows.forEach(function(r){
         var t = String(r.tier || '');
-        var bucket = byTier[t]; // skip tiers not in fixed list (e.g. '0', '')
+        var bucket = byTier[t]; // skip tiers not in fixed list
         var groups = bucket ? [bucket, total] : [total];
+        var artBP = abp[r.kode] || {};
+        var artPM = protolMap[r.kode] || {};
         groups.forEach(function(g){
-            g.WHS_box    += r.WHS_box    || 0;
-            g.WHS_protol += r.WHS_protol || 0;
-            g.WHB_box    += r.WHB_box    || 0;
-            g.WHB_protol += r.WHB_protol || 0;
-            g.WHJ_box    += r.WHJ_box    || 0;
-            g.WHJ_protol += r.WHJ_protol || 0;
-            g.WHO_box    += r.WHO_box    || 0;
-            g.WHO_protol += r.WHO_protol || 0;
-            g.retail     += r.stokRetail || 0;
-            g.consig     += r.stokConsig || 0;
+            ['WHS','WHB','WHJ','WHO'].forEach(function(grp){
+                var d = artBP[grp] || { boxPairs:0, protolPairs:0 };
+                g[grp + '_box']    += d.boxPairs;
+                g[grp + '_protol'] += d.protolPairs + (artPM[grp] || 0);
+            });
+            g.retail += r.stokRetail || 0;
+            g.consig += r.stokConsig || 0;
             var ms = r.monthlySales || [];
             if (ms.length > 0) g.salesLast += ms[ms.length - 1] || 0;
-            // 3-month avg: average of last 3 elements available
             var start = Math.max(0, ms.length - 3);
             for (var i = start; i < ms.length; i++) { g.sales3Sum += ms[i] || 0; g.sales3N++; }
         });
@@ -5771,7 +5861,7 @@ function scRender() {
     // ga invalidate cache → skip 400K+ iterations saat user filter ringan.
     var _snapKey = (allData['_meta'] || {}).snapshot_date || '';
     var _consigSnap = (typeof consignmentStockData !== 'undefined' && consignmentStockData && consignmentStockData._meta) ? (consignmentStockData._meta.snapshot_date || '') : '';
-    var _scAggKey = scViewMode + '|' + (gf.area || '_all') + '|' + _snapKey + '|' + _consigSnap + '|tsv2';
+    var _scAggKey = scViewMode + '|' + (gf.area || '_all') + '|' + _snapKey + '|' + _consigSnap;
     var rows;
     if (window._scAggCache && window._scAggCache.key === _scAggKey && window._scAggCache.rows) {
         rows = window._scAggCache.rows;
@@ -5799,12 +5889,6 @@ function scRender() {
                 version: (typeof _normalizeVersion === 'function') ? _normalizeVersion(it.version) : (it.version || ''),
                 WHS: 0, WHB: 0, WHJ: 0,
                 WHOB: 0, WHOJ: 0,
-                // Box/Protol split per WH bucket (pairs). Box pairs are always multiples of 12
-                // (full dozens stored di gudang utama); Protol pairs are loose (from gudang Protol).
-                WHS_box: 0, WHS_protol: 0,
-                WHB_box: 0, WHB_protol: 0,
-                WHJ_box: 0, WHJ_protol: 0,
-                WHO_box: 0, WHO_protol: 0,   // online (Bali + Jakarta merged)
                 stokRetail: 0, stokConsig: 0,
                 _kkSet: {}                // collects kode_kecil children for sales aggregation
             };
@@ -5857,12 +5941,6 @@ function scRender() {
                 if (scAreaFilter && scAreaWHcodes.indexOf(c) === -1) return;
                 var qty = Number(it.store_stock[wh]) || 0;
                 row[c] += qty;
-                // Box/Protol split — gudang yang ada "protol" di namanya = Protol bucket
-                var isProtol = String(wh).toLowerCase().indexOf('protol') !== -1;
-                // WHOB + WHOJ collapsed into single WHO_box/WHO_protol for "WH Online" column
-                var grp = (c === 'WHOB' || c === 'WHOJ') ? 'WHO' : c;
-                var fld = grp + (isProtol ? '_protol' : '_box');
-                row[fld] = (row[fld] || 0) + qty;
             });
         });
     });
