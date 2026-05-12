@@ -6411,10 +6411,14 @@ function anaRender() {
         wrap.style.height = Math.max(400, items.length * 28 + 80) + 'px';
     }
 
-    // Build chart data — labels = kode + name (ratio masuk tooltip aja)
+    // Build chart data — labels = multi-line (kode+name | ratio) per article
     var labels = items.map(function(x){
-        var n = (x.name || '').substring(0, 32);
-        return x.kode + (n ? ' · ' + n : '');
+        var n = (x.name || '').substring(0, 30);
+        var ratio = x.sales3 > 0 ? (x.stock / x.sales3).toFixed(2) : (x.stock > 0 ? '∞' : '0');
+        return [
+            x.kode + (n ? ' · ' + n : ''),
+            'ratio ' + ratio
+        ];
     });
     var stockData = items.map(function(x){ return Math.round(x.stock); });
     var salesData = items.map(function(x){ return Math.round(x.sales3); });
