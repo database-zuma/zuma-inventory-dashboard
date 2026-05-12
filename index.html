@@ -5636,38 +5636,32 @@ function _scRenderTierSummary(rows) {
         });
     });
 
-    // Pass 2: compute box vs protol per article × WH bucket using min-across-assortment logic
-    //   abp[kode][grp] = { boxPairs, protolPairs }
+    // Pass 2: compute box vs protol per article × WH bucket via floor(total/12)
+    //   1 box = 12 pair (Zuma convention, regardless of how sizes distributed dalam 1 box).
+    //   abp[kode][grp] = { boxCount (int), boxPairs (= boxCount * 12), protolPairs (remainder) }
     var abp = {};
     Object.keys(sizeMap).forEach(function(kode){
-        // Assortment = union of sizes across all WH buckets for this article
-        var asSet = {};
-        Object.keys(sizeMap[kode]).forEach(function(grp){
-            Object.keys(sizeMap[kode][grp]).forEach(function(s){ asSet[s] = true; });
-        });
-        var sizes = Object.keys(asSet);
-        var N = sizes.length;
         abp[kode] = {};
         Object.keys(sizeMap[kode]).forEach(function(grp){
             var sm = sizeMap[kode][grp];
-            var totalQty = 0, minQty = (N > 0 ? Infinity : 0);
-            for (var i = 0; i < N; i++) {
-                var q = sm[sizes[i]] || 0;
-                totalQty += q;
-                if (q < minQty) minQty = q;
-            }
-            if (minQty === Infinity) minQty = 0;
-            var boxPairs = minQty * N;
+            var totalQty = 0;
+            Object.keys(sm).forEach(function(s){ totalQty += sm[s] || 0; });
+            var boxCount = Math.floor(totalQty / 12);
+            var boxPairs = boxCount * 12;
             var protolRem = totalQty - boxPairs;
-            abp[kode][grp] = { boxPairs: boxPairs, protolPairs: protolRem };
+            abp[kode][grp] = { boxCount: boxCount, boxPairs: boxPairs, protolPairs: protolRem };
         });
     });
 
     // Pass 3: aggregate per tier from rows (using abp + protolMap for box/protol; rows for retail/consig/sales)
     function blank() {
         return {
-            WHS_box:0, WHS_protol:0, WHB_box:0, WHB_protol:0,
-            WHJ_box:0, WHJ_protol:0, WHO_box:0, WHO_protol:0,
+            // _boxCount: jumlah box utuh (integer); _box: total pair dalam bentuk box (= boxCount × 12)
+            // _protol: loose pair (sisa dari Box gudang yang gak komplit 12 + semua stock dari Protol gudang)
+            WHS_boxCount:0, WHS_box:0, WHS_protol:0,
+            WHB_boxCount:0, WHB_box:0, WHB_protol:0,
+            WHJ_boxCount:0, WHJ_box:0, WHJ_protol:0,
+            WHO_boxCount:0, WHO_box:0, WHO_protol:0,
             retail:0, consig:0,
             salesLast:0, sales3Sum:0, sales3N:0
         };
@@ -5683,9 +5677,10 @@ function _scRenderTierSummary(rows) {
         var artPM = protolMap[r.kode] || {};
         groups.forEach(function(g){
             ['WHS','WHB','WHJ','WHO'].forEach(function(grp){
-                var d = artBP[grp] || { boxPairs:0, protolPairs:0 };
-                g[grp + '_box']    += d.boxPairs;
-                g[grp + '_protol'] += d.protolPairs + (artPM[grp] || 0);
+                var d = artBP[grp] || { boxCount:0, boxPairs:0, protolPairs:0 };
+                g[grp + '_boxCount'] += d.boxCount;
+                g[grp + '_box']      += d.boxPairs;
+                g[grp + '_protol']   += d.protolPairs + (artPM[grp] || 0);
             });
             g.retail += r.stokRetail || 0;
             g.consig += r.stokConsig || 0;
@@ -5701,9 +5696,10 @@ function _scRenderTierSummary(rows) {
         g.WHB_total = g.WHB_box + g.WHB_protol;
         g.WHJ_total = g.WHJ_box + g.WHJ_protol;
         g.WHO_total = g.WHO_box + g.WHO_protol;
-        g.global_wh_box    = g.WHS_box    + g.WHB_box    + g.WHJ_box    + g.WHO_box;
-        g.global_wh_protol = g.WHS_protol + g.WHB_protol + g.WHJ_protol + g.WHO_protol;
-        g.global_wh_total  = g.global_wh_box + g.global_wh_protol;
+        g.global_wh_boxCount = g.WHS_boxCount + g.WHB_boxCount + g.WHJ_boxCount + g.WHO_boxCount;
+        g.global_wh_box      = g.WHS_box     + g.WHB_box     + g.WHJ_box     + g.WHO_box;
+        g.global_wh_protol   = g.WHS_protol  + g.WHB_protol  + g.WHJ_protol  + g.WHO_protol;
+        g.global_wh_total    = g.global_wh_box + g.global_wh_protol;
         g.global_all = g.global_wh_total + g.retail + g.consig;
         g.sales3Avg = g.sales3N > 0 ? (g.sales3Sum / g.sales3N) : 0;
         return g;
@@ -5717,14 +5713,10 @@ function _scRenderTierSummary(rows) {
         if (n === 0) return '<span style="color:#94a3b8;">0</span>';
         return Math.round(n).toLocaleString('id-ID');
     }
-    function fBox(pairs) {
-        // pairs from "Box" warehouse → display as box count (pairs / 12)
-        if (!pairs) return '<span style="color:#94a3b8;">0</span>';
-        var box = pairs / 12;
-        // Show as integer if exact, else 1 decimal
-        return (Math.abs(box - Math.round(box)) < 0.05)
-            ? Math.round(box).toLocaleString('id-ID')
-            : box.toLocaleString('id-ID', {minimumFractionDigits:1, maximumFractionDigits:1});
+    function fBox(boxCount) {
+        // Box count = sum of floor(total_pair / 12) per article. Selalu integer.
+        if (!boxCount) return '<span style="color:#94a3b8;">0</span>';
+        return Math.round(boxCount).toLocaleString('id-ID');
     }
     function pct(part, whole) {
         if (!whole || whole === 0) return '—';
@@ -5798,15 +5790,15 @@ function _scRenderTierSummary(rows) {
         var s = '<tr>';
         s += '<td style="' + labelCss + '">' + label + '</td>';
         // WHS
-        s += cell(fBox(g.WHS_box)) + cell(f(g.WHS_protol)) + cell(f(g.WHS_total)) + cellP(pct(g.WHS_total, total.WHS_total));
+        s += cell(fBox(g.WHS_boxCount)) + cell(f(g.WHS_protol)) + cell(f(g.WHS_total)) + cellP(pct(g.WHS_total, total.WHS_total));
         // WHB
-        s += cell(fBox(g.WHB_box)) + cell(f(g.WHB_protol)) + cell(f(g.WHB_total)) + cellP(pct(g.WHB_total, total.WHB_total));
+        s += cell(fBox(g.WHB_boxCount)) + cell(f(g.WHB_protol)) + cell(f(g.WHB_total)) + cellP(pct(g.WHB_total, total.WHB_total));
         // WHJ
-        s += cell(fBox(g.WHJ_box)) + cell(f(g.WHJ_protol)) + cell(f(g.WHJ_total)) + cellP(pct(g.WHJ_total, total.WHJ_total));
+        s += cell(fBox(g.WHJ_boxCount)) + cell(f(g.WHJ_protol)) + cell(f(g.WHJ_total)) + cellP(pct(g.WHJ_total, total.WHJ_total));
         // WHO
-        s += cell(fBox(g.WHO_box)) + cell(f(g.WHO_protol)) + cell(f(g.WHO_total)) + cellP(pct(g.WHO_total, total.WHO_total));
+        s += cell(fBox(g.WHO_boxCount)) + cell(f(g.WHO_protol)) + cell(f(g.WHO_total)) + cellP(pct(g.WHO_total, total.WHO_total));
         // Global WH
-        s += cell(fBox(g.global_wh_box)) + cell(f(g.global_wh_protol)) + cell(f(g.global_wh_total)) + cellP(pct(g.global_wh_total, total.global_wh_total));
+        s += cell(fBox(g.global_wh_boxCount)) + cell(f(g.global_wh_protol)) + cell(f(g.global_wh_total)) + cellP(pct(g.global_wh_total, total.global_wh_total));
         // Global Retail
         s += cell(f(g.retail)) + cellP(pct(g.retail, total.retail));
         // Global Consig
