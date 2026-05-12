@@ -5670,12 +5670,18 @@ function _scRenderTierSummary(rows) {
     var byTier = {};
     var total = blank();
     TIERS.forEach(function(t){ byTier[t] = blank(); });
+    // Dedupe box/protol per article: di SKU mode rows berisi N row per article (per-size).
+    // Stock retail/consig/sales boleh dijumlah per-row (sudah per-size, no double count),
+    // tapi box/protol harus ditambah hanya SEKALI per article (abp itu article-level).
+    var seenKode = {};
     rows.forEach(function(r){
         var t = String(r.tier || '');
         var bucket = byTier[t]; // skip tiers not in fixed list
         var groups = bucket ? [bucket, total] : [total];
         var artBP = abp[r.kode] || {};
         var artPM = protolMap[r.kode] || {};
+        var firstSeen = !seenKode[r.kode];
+        seenKode[r.kode] = true;
         // Pre-compute per-row sales metrics
         var ms = r.monthlySales || [];
         var rowSalesLast = ms.length > 0 ? (ms[ms.length - 1] || 0) : 0;
@@ -5684,12 +5690,16 @@ function _scRenderTierSummary(rows) {
         for (var i = start; i < ms.length; i++) { rowSales3Sum += ms[i] || 0; rowSales3N++; }
         var rowSales3Avg = rowSales3N > 0 ? (rowSales3Sum / rowSales3N) : 0;
         groups.forEach(function(g){
-            ['WHS','WHB','WHJ','WHO'].forEach(function(grp){
-                var d = artBP[grp] || { boxCount:0, boxPairs:0, protolPairs:0 };
-                g[grp + '_boxCount'] += d.boxCount;
-                g[grp + '_box']      += d.boxPairs;
-                g[grp + '_protol']   += d.protolPairs + (artPM[grp] || 0);
-            });
+            // Box/Protol: add ONCE per article (skip duplicates in SKU mode)
+            if (firstSeen) {
+                ['WHS','WHB','WHJ','WHO'].forEach(function(grp){
+                    var d = artBP[grp] || { boxCount:0, boxPairs:0, protolPairs:0 };
+                    g[grp + '_boxCount'] += d.boxCount;
+                    g[grp + '_box']      += d.boxPairs;
+                    g[grp + '_protol']   += d.protolPairs + (artPM[grp] || 0);
+                });
+            }
+            // Retail/Consig/Sales: per-row (sudah benar di kedua mode)
             g.retail    += r.stokRetail || 0;
             g.consig    += r.stokConsig || 0;
             g.salesLast += rowSalesLast;
