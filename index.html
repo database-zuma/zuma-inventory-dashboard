@@ -4973,7 +4973,7 @@ async function exportSalesAudit(btnEl) {
     var period = (fromV === toV) ? fromV : (fromV + ':' + toV);
     var origText = label ? label.textContent : '';
     if (btn) btn.disabled = true;
-    if (label) label.textContent = 'Menyiapkan… (~30-90s)';
+    if (label) label.textContent = 'Menyiapkan… (klik pertama ~30-90s, klik berikutnya <2s)';
     try {
         var url = API_BASE + '/api/export/sales-audit?period=' + encodeURIComponent(period);
         var res = await fetch(url, { headers: { 'X-API-Key': API_KEY } });
@@ -5004,7 +5004,7 @@ async function exportStokPerWH(btnEl) {
     var label = document.getElementById('invStokWHBtnLabel');
     var origText = label ? label.textContent : '';
     if (btn) btn.disabled = true;
-    if (label) label.textContent = 'Menyiapkan… (~30-45s)';
+    if (label) label.textContent = 'Menyiapkan… (klik pertama ~15-20s, klik berikutnya <1s)';
     try {
         var url = API_BASE + '/api/export/stok-per-wh';
         var res = await fetch(url, { headers: { 'X-API-Key': API_KEY } });
