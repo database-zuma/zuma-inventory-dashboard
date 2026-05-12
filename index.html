@@ -8,6 +8,7 @@
 <meta http-equiv="Expires" content="0">
 <title>Zuma Inventory Analytics</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <!-- xlsx-js-style loaded on-demand by ensureXlsx() — saves ~425 KB on first paint -->
 <script>
   window._xlsxLoadingPromise = null;
@@ -1123,7 +1124,7 @@ html, body {
     <button class="tab-btn active" data-tab="stockcontrol">Stock Control</button>
     <button class="tab-btn" data-tab="maxstock">Max Stock</button>
     <button class="tab-btn" data-tab="skusearch" style="display:none;">SKU Search</button>
-    <button class="tab-btn" data-tab="chart">Chart</button>
+    <button class="tab-btn" data-tab="chart">Performa</button>
     <button class="tab-btn" data-tab="summaryreport">Summary Report</button>
   </nav>
 
@@ -1434,29 +1435,12 @@ html, body {
   <div class="card" style="margin-bottom:12px;">
     <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;">
       <div>
-        <div class="card-title">Stock Now vs Sales 3 Bulan — Per Article</div>
+        <div class="card-title">Performa Article — Stock Now vs Sales 3 Bulan</div>
         <div class="card-meta" id="anaCountInfo" style="font-size:11px;color:var(--fg-soft);">—</div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <label style="font-size:11px;color:var(--fg-soft);">Urut:</label>
-        <select id="anaSortBy" class="filter-select" onchange="anaRender()" style="min-width:160px;">
-          <option value="sales3">Sales 3 Bulan (DESC)</option>
-          <option value="stock">Stock Now (DESC)</option>
-          <option value="ratio_high">Stock/Sales Ratio (oversupply dulu)</option>
-          <option value="ratio_low">Sales/Stock Ratio (laris dulu)</option>
-        </select>
-        <label style="font-size:11px;color:var(--fg-soft);">Top:</label>
-        <select id="anaTopN" class="filter-select" onchange="anaRender()" style="min-width:80px;">
-          <option value="20">Top 20</option>
-          <option value="50" selected>Top 50</option>
-          <option value="100">Top 100</option>
-          <option value="200">Top 200</option>
-          <option value="9999">Semua</option>
-        </select>
       </div>
     </div>
     <div style="padding:8px 14px;font-size:11px;color:var(--fg-soft);border-top:1px solid var(--border-soft);">
-      Mengikuti filter aktif (area / gender / series / tier / version / search). Stock Now = WH + Retail + Consig. Sales 3 Bulan = sum of last 3 months (semua channel).
+      Tanpa filter: top 20 article (sales DESC). Pakai filter (area / gender / series / tier / version / search) → tampilkan semua article yang match. Stock Now = WH + Retail + Consig. Sales 3 Bulan = sum of last 3 months.
     </div>
   </div>
 
@@ -6339,7 +6323,7 @@ function scRender() {
 function anaRender() {
     var canvas = document.getElementById('anaChart');
     if (!canvas) return;
-    // Ensure scFiltered is populated — call scRender if needed
+    // Ensure scFiltered populated (scRender → filter aktif applied di sana)
     if (!scFiltered || !scFiltered.length) {
         if (typeof scRender === 'function') {
             try { scRender(); } catch (e) { console.warn('anaRender: scRender failed', e); }
@@ -6368,52 +6352,37 @@ function anaRender() {
     });
     var items = Object.values(perKode);
 
-    // Sort
-    var sortBy = (document.getElementById('anaSortBy') || {}).value || 'sales3';
-    if (sortBy === 'stock') {
-        items.sort(function(a,b){ return b.stock - a.stock; });
-    } else if (sortBy === 'ratio_high') {
-        // Stock/Sales ratio: tinggi = oversupply. Article tanpa sales = priority tinggi
-        items.sort(function(a,b){
-            var ra = a.sales3 > 0 ? a.stock / a.sales3 : (a.stock > 0 ? 9999 : 0);
-            var rb = b.sales3 > 0 ? b.stock / b.sales3 : (b.stock > 0 ? 9999 : 0);
-            return rb - ra;
-        });
-    } else if (sortBy === 'ratio_low') {
-        // Sales/Stock ratio: tinggi = laris. Article tanpa stock kalau ada sales = priority tinggi
-        items.sort(function(a,b){
-            var ra = a.stock > 0 ? a.sales3 / a.stock : (a.sales3 > 0 ? 9999 : 0);
-            var rb = b.stock > 0 ? b.sales3 / b.stock : (b.sales3 > 0 ? 9999 : 0);
-            return rb - ra;
-        });
-    } else {
-        // Default: sales3 DESC
-        items.sort(function(a,b){ return b.sales3 - a.sales3; });
-    }
+    // Default sort: Sales 3 Bulan DESC (mirror Stock Control yang sort by AVG/BLN)
+    items.sort(function(a,b){ return b.sales3 - a.sales3; });
 
-    // Top N
-    var topN = parseInt((document.getElementById('anaTopN') || {}).value, 10) || 50;
+    // Detect filter aktif — kalau ada filter, tampilin SEMUA. Kalau tanpa filter, top 20.
+    var gfActive = !!(
+        (gf && (gf.area || gf.gender || gf.tier || gf.version ||
+                (gf.search && String(gf.search).trim()) ||
+                (gf.series && (Array.isArray(gf.series) ? gf.series.length : gf.series))))
+    );
     var totalCount = items.length;
-    items = items.slice(0, topN);
+    if (!gfActive) items = items.slice(0, 20);
 
     // Update info text
     var info = document.getElementById('anaCountInfo');
     if (info) {
         var totalStock = items.reduce(function(s,x){ return s + x.stock; }, 0);
         var totalSales = items.reduce(function(s,x){ return s + x.sales3; }, 0);
-        info.textContent = 'Tampil ' + items.length.toLocaleString('id-ID') + ' / ' + totalCount.toLocaleString('id-ID') + ' article · stock ' + Math.round(totalStock).toLocaleString('id-ID') + ' pair · sales ' + Math.round(totalSales).toLocaleString('id-ID') + ' pair';
+        var modeLabel = gfActive ? 'Filter aktif' : 'Top 20 (Sales DESC)';
+        info.textContent = modeLabel + ' · Tampil ' + items.length.toLocaleString('id-ID') + ' / ' + totalCount.toLocaleString('id-ID') + ' article · stock ' + Math.round(totalStock).toLocaleString('id-ID') + ' pair · sales ' + Math.round(totalSales).toLocaleString('id-ID') + ' pair';
     }
 
-    // Adjust canvas height — dynamic based on # items (28px per bar group)
+    // Dynamic height — 32px per bar group (lebih lega buat label angka)
     var wrap = document.getElementById('anaChartWrap');
     if (wrap) {
-        wrap.style.height = Math.max(400, items.length * 28 + 80) + 'px';
+        wrap.style.height = Math.max(400, items.length * 32 + 80) + 'px';
     }
 
-    // Build chart data
+    // Build chart data — labels = "KODE · Name" (single line)
     var labels = items.map(function(x){
         var n = (x.name || '').substring(0, 32);
-        return x.kode + (n ? ' — ' + n : '');
+        return x.kode + (n ? ' · ' + n : '');
     });
     var stockData = items.map(function(x){ return Math.round(x.stock); });
     var salesData = items.map(function(x){ return Math.round(x.sales3); });
@@ -6427,6 +6396,10 @@ function anaRender() {
         console.warn('Chart.js not loaded');
         return;
     }
+    // Register datalabels plugin once
+    if (typeof ChartDataLabels !== 'undefined' && !window._anaDLRegistered) {
+        try { Chart.register(ChartDataLabels); window._anaDLRegistered = true; } catch(e) {}
+    }
 
     window._anaChartInstance = new Chart(canvas.getContext('2d'), {
         type: 'bar',
@@ -6436,20 +6409,20 @@ function anaRender() {
                 {
                     label: 'Stock Now (pair)',
                     data: stockData,
-                    backgroundColor: 'rgba(0, 42, 58, 0.85)',  // navy
-                    borderColor: 'rgba(0, 42, 58, 1)',
+                    backgroundColor: 'rgba(0, 42, 58, 0.85)',
                     borderWidth: 0,
-                    barPercentage: 0.85,
-                    categoryPercentage: 0.85
+                    barPercentage: 0.9,
+                    categoryPercentage: 0.85,
+                    minBarLength: 2
                 },
                 {
                     label: 'Sales 3 Bulan (pair)',
                     data: salesData,
-                    backgroundColor: 'rgba(0, 226, 115, 0.85)',  // green
-                    borderColor: 'rgba(0, 196, 99, 1)',
+                    backgroundColor: 'rgba(0, 226, 115, 0.85)',
                     borderWidth: 0,
-                    barPercentage: 0.85,
-                    categoryPercentage: 0.85
+                    barPercentage: 0.9,
+                    categoryPercentage: 0.85,
+                    minBarLength: 2
                 }
             ]
         },
@@ -6457,17 +6430,39 @@ function anaRender() {
             indexAxis: 'y',
             responsive: true,
             maintainAspectRatio: false,
+            layout: { padding: { right: 110 } },  // ruang buat label angka + ratio di ujung bar
             plugins: {
                 legend: {
                     position: 'top',
-                    labels: { font: { size: 12 }, color: '#0f172a' }
+                    labels: { font: { size: 12, weight: 600 }, color: '#0f172a' }
+                },
+                datalabels: {
+                    anchor: 'end',
+                    align: 'right',
+                    clip: false,
+                    formatter: function(v, ctx) {
+                        if (v == null || v === 0) return '';
+                        var label = Math.round(v).toLocaleString('id-ID');
+                        // Append ratio ke label sales (datasetIndex 1)
+                        if (ctx.datasetIndex === 1) {
+                            var it = items[ctx.dataIndex];
+                            if (it) {
+                                var ratio = it.sales3 > 0 ? (it.stock / it.sales3).toFixed(2) : (it.stock > 0 ? '∞' : '0');
+                                label += '  (r: ' + ratio + ')';
+                            }
+                        }
+                        return label;
+                    },
+                    font: { size: 10, weight: 600 },
+                    color: function(ctx) {
+                        return ctx.datasetIndex === 0 ? '#002A3A' : '#00834e';
+                    }
                 },
                 tooltip: {
                     callbacks: {
                         afterBody: function(ctx) {
                             if (!ctx || !ctx.length) return '';
-                            var idx = ctx[0].dataIndex;
-                            var it = items[idx];
+                            var it = items[ctx[0].dataIndex];
                             if (!it) return '';
                             var ratio = it.sales3 > 0 ? (it.stock / it.sales3).toFixed(2) : '∞';
                             return [
@@ -6482,10 +6477,12 @@ function anaRender() {
             scales: {
                 x: {
                     beginAtZero: true,
+                    stacked: false,
                     ticks: { color: '#0f172a', callback: function(v){ return v.toLocaleString('id-ID'); } },
                     grid: { color: 'rgba(0,0,0,0.05)' }
                 },
                 y: {
+                    stacked: false,
                     ticks: { color: '#0f172a', font: { size: 10 }, autoSkip: false },
                     grid: { display: false }
                 }
