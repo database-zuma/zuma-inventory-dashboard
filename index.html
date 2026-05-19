@@ -5049,25 +5049,27 @@ function scShowKodeBreakdown(kode, mode) {
         if (_kbAreaFilter === 'Bali') return isBali || (isOnline && isBali);
         if (_kbAreaFilter === 'Jakarta') return isJkt || (isOnline && isJkt);
         if (_kbAreaFilter === 'Jatim' || _kbAreaFilter === 'Jawa Timur') return isPusat;
-        // Batam/Sulawesi/Sumatera/Lombok: no own warehouse → exclude all WH
+        // Lombok/Batam/Sulawesi/Sumatera: no own warehouse → exclude all WH
         return false;
     }
     function _kbStoreAreaMatch(storeName) {
         if (!_kbAreaFilter) return true;
         var sa = (typeof getAreaFromStore === 'function') ? getAreaFromStore(storeName) : '';
-        if (sa === 'Lombok') sa = 'Bali';
         return sa === _kbAreaFilter;
     }
     function _kbConsigAreaMatch(storeName) {
         if (!_kbAreaFilter) return true;
         var s = String(storeName || '').toLowerCase();
-        if (_kbAreaFilter === 'Bali') return s.indexOf('pepito') !== -1 || s.indexOf('royal surf') !== -1
+        // Bali tanpa "lombok" — Pepito Bali OK, Pepito Lombok pindah ke bucket Lombok
+        if (_kbAreaFilter === 'Bali') return s.indexOf('lombok') === -1 && (
+               s.indexOf('pepito') !== -1 || s.indexOf('royal surf') !== -1
             || s.indexOf('bintang') !== -1 || s.indexOf('clandy') !== -1 || s.indexOf('padma') !== -1
-            || s.indexOf('bali united') !== -1 || s.indexOf('sogo') !== -1;
+            || s.indexOf('bali united') !== -1 || s.indexOf('sogo') !== -1);
         if (_kbAreaFilter === 'Jakarta') return s.indexOf('aeon') !== -1 || s.indexOf('grand lucky') !== -1
             || s.indexOf('grandlucky') !== -1 || s.indexOf('omosando') !== -1
             || s.indexOf('pavels') !== -1 || s.indexOf('paveels') !== -1 || s.indexOf('sonobebe') !== -1;
         if (_kbAreaFilter === 'Jatim' || _kbAreaFilter === 'Jawa Timur') return s.indexOf('cilubaa') !== -1 || s.indexOf('cilukba') !== -1;
+        if (_kbAreaFilter === 'Lombok') return s.indexOf('lombok') !== -1;
         return false;
     }
 
@@ -6010,7 +6012,7 @@ function scRender() {
         return byKK[key];
     }
 
-    // Stock Control area filter: respect global filter (gf.area). Lombok merged into Bali.
+    // Stock Control area filter: respect global filter (gf.area). Lombok = retail/consig only (no own WH).
     // classifyWhArea returns 'WHB'|'WHJ'|'WHS'|'WHOB'|'WHOJ'. Map area filter to WH codes.
     var scAreaFilter = (typeof gf !== 'undefined' && gf.area) ? gf.area : '';
     function _scAreaWHCodes(a) {
@@ -6023,20 +6025,21 @@ function scRender() {
     function _scStoreInArea(store, a) {
         if (!a) return true;
         var sa = (typeof getAreaFromStore === 'function') ? getAreaFromStore(store) : '';
-        if (sa === 'Lombok') sa = 'Bali'; // Stock Control: Lombok ikut Bali
         return sa === a;
     }
     function _scConsigStoreInArea(store, a) {
         if (!a) return true;
         var s = String(store || '').toLowerCase();
-        // Bali (includes Pepito Lombok merged → Bali)
-        if (a === 'Bali') return s.indexOf('pepito') !== -1 || s.indexOf('royal surf') !== -1
+        // Bali tanpa "lombok" — Pepito Lombok pindah ke bucket Lombok
+        if (a === 'Bali') return s.indexOf('lombok') === -1 && (
+               s.indexOf('pepito') !== -1 || s.indexOf('royal surf') !== -1
             || s.indexOf('bintang') !== -1 || s.indexOf('clandy') !== -1 || s.indexOf('padma') !== -1
-            || s.indexOf('bali united') !== -1 || s.indexOf('sogo') !== -1;
+            || s.indexOf('bali united') !== -1 || s.indexOf('sogo') !== -1);
         if (a === 'Jakarta') return s.indexOf('aeon') !== -1 || s.indexOf('grand lucky') !== -1
             || s.indexOf('grandlucky') !== -1 || s.indexOf('omosando') !== -1
             || s.indexOf('pavels') !== -1 || s.indexOf('paveels') !== -1 || s.indexOf('sonobebe') !== -1;
         if (a === 'Jawa Timur' || a === 'Jatim') return s.indexOf('cilubaa') !== -1 || s.indexOf('cilukba') !== -1;
+        if (a === 'Lombok') return s.indexOf('lombok') !== -1;
         return false;
     }
 
@@ -7297,8 +7300,7 @@ function gfPopulateDependentFilters() {
         el.innerHTML = '<option value="">Semua</option>' + keys.map(function(k){ return '<option>' + esc(k) + '</option>'; }).join('');
         if (keys.indexOf(cur) >= 0) el.value = cur; else el.value = '';
     }
-    // Lombok rollup ke Bali di semua tab — drop dari dropdown area
-    delete areas['Lombok'];
+    // Lombok now a separate area filter option (store assignment di-sesuaikan via storeAreaMap)
     fill('gfArea', areas);
     fill('gfTier', tiers, function(a,b){ return (parseInt(a)||0) - (parseInt(b)||0); });
     fill('gfGender', genders);
@@ -7311,7 +7313,6 @@ function gfPopulateDependentFilters() {
             Object.keys(it.store_stock).forEach(function(s){
                 if (gf.area) {
                     var sa = (typeof getAreaFromStore === 'function') ? getAreaFromStore(s) : '';
-                    if (sa === 'Lombok') sa = 'Bali'; // rollup
                     if (sa !== gf.area) return;
                 }
                 var p = _gfConsigPartner(s);
