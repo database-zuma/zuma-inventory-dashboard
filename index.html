@@ -2212,6 +2212,10 @@ function updateMaxStockAnalysis() {
                 var sl = store.toLowerCase();
                 if (sl.indexOf('warehouse') !== -1) return;
                 if (sl.indexOf('mall of indonesia') !== -1) return;
+                // Apply area/store filter BEFORE aggregating — keeps tierCounts & filteredTierArticles in scope
+                var storeArea = getAreaFromStore(store);
+                if (filterArea && storeArea !== filterArea) return;
+                if (filterStore && store !== filterStore) return;
                 var stock = item.store_stock[store];
                 if (!storeStock[store]) { storeStock[store] = 0; storeTiers[store] = {}; }
                 storeStock[store] += stock;
