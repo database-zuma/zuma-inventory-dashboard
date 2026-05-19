@@ -5033,7 +5033,42 @@ function scShowKodeBreakdown(kode, mode) {
     //        'global' (everything — for STOK GLOBAL cell click)
     mode = String(mode || 'retail').toLowerCase();
 
+    // Respect global area filter (gf.area) — match scRender behavior
+    var _kbAreaFilter = (typeof gf !== 'undefined' && gf.area) ? gf.area : '';
+    function _kbWhAreaMatch(whName) {
+        if (!_kbAreaFilter) return true;
+        var wl = String(whName || '').toLowerCase();
+        var isOnline = wl.indexOf('online') !== -1;
+        var isBali   = wl.indexOf('bali') !== -1 || wl.indexOf('gatsu') !== -1;
+        var isJkt    = wl.indexOf('jakarta') !== -1 || wl.indexOf('pluit') !== -1 || wl.indexOf('jkt') !== -1;
+        var isPusat  = wl.indexOf('pusat') !== -1 || wl.indexOf('surabaya') !== -1;
+        if (_kbAreaFilter === 'Bali') return isBali || (isOnline && isBali);
+        if (_kbAreaFilter === 'Jakarta') return isJkt || (isOnline && isJkt);
+        if (_kbAreaFilter === 'Jatim' || _kbAreaFilter === 'Jawa Timur') return isPusat;
+        // Batam/Sulawesi/Sumatera/Lombok: no own warehouse → exclude all WH
+        return false;
+    }
+    function _kbStoreAreaMatch(storeName) {
+        if (!_kbAreaFilter) return true;
+        var sa = (typeof getAreaFromStore === 'function') ? getAreaFromStore(storeName) : '';
+        if (sa === 'Lombok') sa = 'Bali';
+        return sa === _kbAreaFilter;
+    }
+    function _kbConsigAreaMatch(storeName) {
+        if (!_kbAreaFilter) return true;
+        var s = String(storeName || '').toLowerCase();
+        if (_kbAreaFilter === 'Bali') return s.indexOf('pepito') !== -1 || s.indexOf('royal surf') !== -1
+            || s.indexOf('bintang') !== -1 || s.indexOf('clandy') !== -1 || s.indexOf('padma') !== -1
+            || s.indexOf('bali united') !== -1 || s.indexOf('sogo') !== -1;
+        if (_kbAreaFilter === 'Jakarta') return s.indexOf('aeon') !== -1 || s.indexOf('grand lucky') !== -1
+            || s.indexOf('grandlucky') !== -1 || s.indexOf('omosando') !== -1
+            || s.indexOf('pavels') !== -1 || s.indexOf('paveels') !== -1 || s.indexOf('sonobebe') !== -1;
+        if (_kbAreaFilter === 'Jatim' || _kbAreaFilter === 'Jawa Timur') return s.indexOf('cilubaa') !== -1 || s.indexOf('cilukba') !== -1;
+        return false;
+    }
+
     function whInScope(whName) {
+        if (!_kbWhAreaMatch(whName)) return false;
         var wl = String(whName || '').toLowerCase();
         var isOnline = wl.indexOf('online') !== -1;
         var isBali   = wl.indexOf('bali') !== -1 || wl.indexOf('gatsu') !== -1;
@@ -5099,6 +5134,7 @@ function scShowKodeBreakdown(kode, mode) {
                 var ss = it.store_stock || {};
                 Object.keys(ss).forEach(function(s) {
                     if (String(s).toLowerCase().indexOf('warehouse') !== -1) return;
+                    if (!_kbStoreAreaMatch(s)) return;
                     var qty = Number(ss[s]) || 0;
                     if (!qty) return;
                     getRow('Retail', s, it.kode_kecil, it.size || '', it.name || '')[ent] += qty;
@@ -5131,6 +5167,7 @@ function scShowKodeBreakdown(kode, mode) {
             if (!rowName) rowName = it.name || '';
             var ss = it.store_stock || {};
             Object.keys(ss).forEach(function(s) {
+                if (!_kbConsigAreaMatch(s)) return;
                 var qty = Number(ss[s]) || 0;
                 if (!qty) return;
                 getRow(_consigPartner(s), s, it.kode_kecil, it.size || '', it.name || '').CONSIG += qty;
